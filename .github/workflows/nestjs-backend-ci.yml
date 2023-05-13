@@ -19,6 +19,6 @@ jobs:
         with:
           node-version: 18.x
           cache: 'npm'
-          cache-dependendy-path: nestjs-backend/package-lock.json
+          cache-dependency-path: nestjs-backend/package-lock.json
       - run: npm ci
       - run: npm test
