@@ -16,11 +16,11 @@ jobs:
       - name: Checkout the repository
         uses: actions/checkout@v3
       - name: Setup node.js 18.x
-        working-directory: ./nestjs-backend
         uses: actions/setup-node@v3
         with:
           node-version: 18.x
           cache: 'npm'
+          cache-dependency-path: ./nestjs-backend
       - name: Run tests
         working-directory: ./nestjs-backend
         run: |
