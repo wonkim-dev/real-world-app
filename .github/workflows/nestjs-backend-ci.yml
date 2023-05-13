@@ -13,13 +13,16 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout the repository
+        uses: actions/checkout@v3
       - name: Setup node.js 18.x
+        working-directory: ./nestjs-backend
         uses: actions/setup-node@v3
         with:
           node-version: 18.x
           cache: 'npm'
-      - working-directory: ./nestjs-backend
+      - name: Run tests
+        working-directory: ./nestjs-backend
         run: |
           npm ci
           npm test
