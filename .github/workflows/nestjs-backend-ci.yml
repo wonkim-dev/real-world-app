@@ -25,4 +25,5 @@ jobs:
         working-directory: ./nestjs-backend
         run: |
           npm ci
-          npm test
+          npm run lint
+          npm run test
