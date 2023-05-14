@@ -112,7 +112,7 @@ export class KeycloakApiClientService {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()';
     const charLength = chars.length;
     let salt = '';
-    for (var i = 0; i < length; i++) {
+    for (let i = 0; i < length; i++) {
       salt += chars.charAt(Math.floor(Math.random() * charLength));
     }
     return salt;

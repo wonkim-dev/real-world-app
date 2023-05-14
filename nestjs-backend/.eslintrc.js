@@ -19,15 +19,15 @@ module.exports = {
       'error',
       {
         selector: 'variable',
-        format: ['camelCase', 'UPER_CASE'],
+        format: ['camelCase', 'UPPER_CASE'],
         leadingUnderscore: 'allow',
         trailingUnderscore: 'forbid',
       },
     ],
     'no-use-before-define': 'error',
     'no-var': 'error',
-    conplexity: ['error', { max: 10 }],
+    complexity: ['error', { max: 10 }],
     'no-param-reassign': 'error',
-    ignorePatterns: ['test'],
   },
+  ignorePatterns: ['test', 'src/entity', 'src/**/*.spec.ts'],
 };
