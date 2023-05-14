@@ -3,7 +3,7 @@ import { ApiOperation } from '@nestjs/swagger';
 import { CreateUserInput, UserResponse } from './auth.model';
 import { UserService } from './user.service';
 
-@Controller('users')
+@Controller('api/users')
 export class UserController {
   constructor(private userService: UserService) {}
 
