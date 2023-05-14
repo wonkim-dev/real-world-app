@@ -7,10 +7,11 @@ import { ProfileModule } from './profile/profile.module';
 import { AuthModule } from './auth/auth.module';
 import TypeOrmModule from './configuration/module-import/typeorm';
 import databaseConfig from './configuration/config/database.config';
+import iamConfig from './configuration/config/iam.config';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env', load: [databaseConfig] }),
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env', load: [databaseConfig, iamConfig] }),
     TypeOrmModule,
     ArticleModule,
     ProfileModule,
