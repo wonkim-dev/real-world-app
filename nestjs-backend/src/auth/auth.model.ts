@@ -4,11 +4,7 @@ import { IsEmail, IsString } from 'class-validator';
 // ----------
 // Input DTO
 // ----------
-export class CreateUserInput {
-  @IsString()
-  @ApiProperty()
-  username: string;
-
+export class LoginUserInput {
   @IsEmail()
   @ApiProperty()
   email: string;
@@ -16,6 +12,12 @@ export class CreateUserInput {
   @IsString()
   @ApiProperty()
   password: string;
+}
+
+export class CreateUserInput extends LoginUserInput {
+  @IsString()
+  @ApiProperty()
+  username: string;
 }
 
 // --------------
