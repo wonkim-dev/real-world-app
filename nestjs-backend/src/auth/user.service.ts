@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { KeycloakApiClientService } from './keycloak-api-client.service';
-import { CreateUserInput, DecodedToken, LoginUserInput, UserResponse } from './auth.model';
+import { CreateUserInput, DecodedToken, LoginUserInput, UpdatePasswordInput, UserResponse } from './auth.model';
 import { User } from '../entity';
+import { InvalidPasswordError } from './auth.error';
 
 @Injectable()
 export class UserService {
@@ -13,12 +14,11 @@ export class UserService {
    * @returns Created user with access token
    */
   async createUser(createUserInput: CreateUserInput): Promise<UserResponse> {
-    const serviceAccountAccessToken = await this.keycloakApiClientService.getServiceAccountAccessToken();
-    await this.keycloakApiClientService.createKeycloakUser(serviceAccountAccessToken, createUserInput);
+    await this.keycloakApiClientService.createKeycloakUser(createUserInput);
     const { username, email, password } = createUserInput;
     const userAccessToken = await this.keycloakApiClientService.getUserAccessToken(username, password);
-    const decodedUserToken = this.decodeToken(userAccessToken);
-    const user = await this.dataSource.manager.save(User, { userId: decodedUserToken.sub, username, email });
+    const decodedToken = this.decodeToken(userAccessToken);
+    const user = await this.dataSource.manager.save(User, { userId: decodedToken.sub, username, email });
     return this.buildUserResponse(user, userAccessToken);
   }
 
@@ -28,9 +28,34 @@ export class UserService {
    */
   async loginUser(loginUserInput: LoginUserInput): Promise<UserResponse> {
     const userAccessToken = await this.keycloakApiClientService.getUserAccessToken(loginUserInput.email, loginUserInput.password);
-    const decodedUserToken = this.decodeToken(userAccessToken);
-    const user = await this.dataSource.manager.findOneBy(User, { userId: decodedUserToken.sub });
+    const decodedToken = this.decodeToken(userAccessToken);
+    const user = await this.dataSource.manager.findOneBy(User, { userId: decodedToken.sub });
     return this.buildUserResponse(user, userAccessToken);
+  }
+
+  /**
+   * @description Get a currently authenticated user
+   * @returns Current user with access token
+   */
+  async getCurrentUser(decodedToken: DecodedToken, accessToken: string): Promise<UserResponse> {
+    const user = await this.dataSource.manager.findOneBy(User, { userId: decodedToken.sub });
+    return this.buildUserResponse(user, accessToken);
+  }
+
+  /**
+   * @description Change an existing password with a new password
+   * @returns Current user with access token
+   */
+  async changePassword(decodedToken: DecodedToken, changePasswordInput: UpdatePasswordInput): Promise<UserResponse> {
+    const passwordIsValid = await this.keycloakApiClientService.isPasswordValid(decodedToken.email, changePasswordInput.oldPassword);
+    if (!passwordIsValid) {
+      throw new InvalidPasswordError();
+    }
+    await this.keycloakApiClientService.deleteAllUserSessions(decodedToken.sub);
+    await this.keycloakApiClientService.changePassword(decodedToken.sub, changePasswordInput.newPassword);
+    const newUserAccessToken = await this.keycloakApiClientService.getUserAccessToken(decodedToken.email, changePasswordInput.newPassword);
+    const user = await this.dataSource.manager.findOneBy(User, { userId: decodedToken.sub });
+    return this.buildUserResponse(user, newUserAccessToken);
   }
 
   /**

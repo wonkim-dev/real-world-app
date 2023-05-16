@@ -20,6 +20,16 @@ export class CreateUserInput extends LoginUserInput {
   username: string;
 }
 
+export class UpdatePasswordInput {
+  @IsString()
+  @ApiProperty()
+  oldPassword: string;
+
+  @IsString()
+  @ApiProperty()
+  newPassword: string;
+}
+
 // --------------
 // Response Type
 // --------------
