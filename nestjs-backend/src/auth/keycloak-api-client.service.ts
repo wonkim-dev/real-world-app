@@ -2,7 +2,18 @@ import { HttpException, Injectable, InternalServerErrorException, Logger } from 
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { CreateUserInput } from './auth.model';
+import { camelCase, mapKeys } from 'lodash';
+import { CreateUserInput, SessionResponse, TokenResponse, UpdateUserInfoInput } from './auth.model';
+
+enum KeycloakCredentialType {
+  Password = 'password',
+}
+
+enum KeycloakGrantType {
+  Password = 'password',
+  ClientCredentials = 'client_credentials',
+  RefreshToken = 'refresh_token',
+}
 
 @Injectable()
 export class KeycloakApiClientService {
@@ -20,14 +31,14 @@ export class KeycloakApiClientService {
   }
 
   /**
-   * @description Fetch user access token using password from Keycloak
-   * @returns User access token
+   * @description Fetch user token using password password grant type
+   * @returns Access and refresh tokens
    */
-  async getUserAccessToken(username: string, password: string): Promise<string> {
+  async getUserTokenUsingPassword(username: string, password: string): Promise<TokenResponse> {
     const config = { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } };
     const url = `${this.keycloakHost}/realms/${this.keycloakRealm}/protocol/openid-connect/token`;
     const body = {
-      grant_type: 'password',
+      grant_type: KeycloakGrantType.Password,
       client_id: this.keycloakClientId,
       client_secret: this.keycloakClientSecret,
       username,
@@ -35,7 +46,28 @@ export class KeycloakApiClientService {
     };
     try {
       const { data } = await firstValueFrom(this.httpService.post(url, body, config));
-      return data.access_token;
+      return this.camelCaseTokenResponse(data);
+    } catch (error) {
+      this.logger.error(error.response?.data || error.response?.statusText || error.response || error, error.stack);
+      if (error.response) {
+        throw new HttpException(error.response.data || error.response.statusText, error.response.status);
+      }
+      throw new InternalServerErrorException('Failed to fetch access token of the user');
+    }
+  }
+
+  async getUserTokenUsingRefreshToken(refreshToken: string): Promise<TokenResponse> {
+    const config = { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } };
+    const url = `${this.keycloakHost}/realms/${this.keycloakRealm}/protocol/openid-connect/token`;
+    const body = {
+      grant_type: KeycloakGrantType.RefreshToken,
+      client_id: this.keycloakClientId,
+      client_secret: this.keycloakClientSecret,
+      refresh_token: refreshToken,
+    };
+    try {
+      const { data } = await firstValueFrom(this.httpService.post(url, body, config));
+      return this.camelCaseTokenResponse(data);
     } catch (error) {
       this.logger.error(error.response?.data || error.response?.statusText || error.response || error, error.stack);
       if (error.response) {
@@ -55,7 +87,7 @@ export class KeycloakApiClientService {
     const config = { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } };
     const url = `${this.keycloakHost}/realms/${this.keycloakRealm}/protocol/openid-connect/token`;
     const body = {
-      grant_type: 'password',
+      grant_type: KeycloakGrantType.Password,
       client_id: this.keycloakClientId,
       client_secret: this.keycloakClientSecret,
       username,
@@ -84,7 +116,7 @@ export class KeycloakApiClientService {
       enabled: true,
       credentials: [
         {
-          type: 'password',
+          type: KeycloakCredentialType.Password,
           temporary: false,
           value: createUserInput.password,
           credentialData: JSON.stringify({ hashIterations: 27500, algorithm: 'pbkdf2-sha256', additionalParameters: {} }),
@@ -112,7 +144,7 @@ export class KeycloakApiClientService {
     const url = `${this.keycloakHost}/admin/realms/${this.keycloakRealm}/users/${userId}/reset-password`;
     const salt = this.createRandomSalt(12);
     const body = {
-      type: 'password',
+      type: KeycloakCredentialType.Password,
       temporary: false,
       value: newPassword,
       credentialData: JSON.stringify({ hashIterations: 27500, algorithm: 'pbkdf2-sha256', additionalParameters: {} }),
@@ -133,7 +165,7 @@ export class KeycloakApiClientService {
    * @description Delete all user sessions associated with the user
    * @param userId
    */
-  async deleteAllUserSessions(userId: string) {
+  async deleteSessionsByUserId(userId: string): Promise<void> {
     const serviceAccountToken = await this.getServiceAccountAccessToken();
     const config = { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceAccountToken}` } };
     const url = `${this.keycloakHost}/admin/realms/${this.keycloakRealm}/users/${userId}/logout`;
@@ -144,7 +176,53 @@ export class KeycloakApiClientService {
       if (error.response) {
         throw new HttpException(error.response.data || error.response.statusText, error.response.status);
       }
-      throw new InternalServerErrorException('Failed to logout user');
+      throw new InternalServerErrorException();
+    }
+  }
+
+  async getSessionsByUserId(userId: string): Promise<SessionResponse[]> {
+    const serviceAccountToken = await this.getServiceAccountAccessToken();
+    const config = { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceAccountToken}` } };
+    const url = `${this.keycloakHost}/admin/realms/${this.keycloakRealm}/users/${userId}/sessions`;
+    try {
+      const { data } = await firstValueFrom(this.httpService.get(url, config));
+      return data;
+    } catch (error) {
+      this.logger.error(error.response?.data || error.response?.statusText || error.response || error, error.stack);
+      if (error.response) {
+        throw new HttpException(error.response.data || error.response.statusText, error.response.status);
+      }
+      throw new InternalServerErrorException();
+    }
+  }
+
+  async deleteSessionBySessionId(sessionId: string): Promise<void> {
+    const serviceAccountToken = await this.getServiceAccountAccessToken();
+    const config = { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceAccountToken}` } };
+    const url = `${this.keycloakHost}/admin/realms/${this.keycloakRealm}/sessions/${sessionId}`;
+    try {
+      await firstValueFrom(this.httpService.delete(url, config));
+    } catch (error) {
+      this.logger.error(error.response?.data || error.response?.statusText || error.response || error, error.stack);
+      if (error.response) {
+        throw new HttpException(error.response.data || error.response.statusText, error.response.status);
+      }
+      throw new InternalServerErrorException('Failed to delete a session');
+    }
+  }
+
+  async updateUserInfo(userId: string, updateKeycloakUserInput: Partial<UpdateUserInfoInput>): Promise<void> {
+    const serviceAccountToken = await this.getServiceAccountAccessToken();
+    const config = { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceAccountToken}` } };
+    const url = `${this.keycloakHost}/admin/realms/${this.keycloakRealm}/users/${userId}`;
+    try {
+      await firstValueFrom(this.httpService.put(url, updateKeycloakUserInput, config));
+    } catch (error) {
+      this.logger.error(error.response?.data || error.response?.statusText || error.response || error, error.stack);
+      if (error.response) {
+        throw new HttpException(error.response.data || error.response.statusText, error.response.status);
+      }
+      throw new InternalServerErrorException('Failed to create user');
     }
   }
 
@@ -156,7 +234,7 @@ export class KeycloakApiClientService {
     const config = { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } };
     const url = `${this.keycloakHost}/realms/${this.keycloakRealm}/protocol/openid-connect/token`;
     const body = {
-      grant_type: 'client_credentials',
+      grant_type: KeycloakGrantType.ClientCredentials,
       client_id: this.keycloakClientId,
       client_secret: this.keycloakClientSecret,
     };
@@ -185,5 +263,9 @@ export class KeycloakApiClientService {
       salt += characters.charAt(Math.floor(Math.random() * characterLength));
     }
     return salt;
+  }
+
+  private camelCaseTokenResponse(tokenObject: any): TokenResponse {
+    return mapKeys(tokenObject, (value, key) => camelCase(key)) as TokenResponse;
   }
 }

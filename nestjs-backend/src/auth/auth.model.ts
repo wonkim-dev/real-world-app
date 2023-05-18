@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString } from 'class-validator';
+import { IsEmail, IsOptional, IsString } from 'class-validator';
 
 // ----------
 // Input DTO
@@ -20,7 +20,7 @@ export class CreateUserInput extends LoginUserInput {
   username: string;
 }
 
-export class UpdatePasswordInput {
+export class ChangeUserPasswordInput {
   @IsString()
   @ApiProperty()
   oldPassword: string;
@@ -28,6 +28,23 @@ export class UpdatePasswordInput {
   @IsString()
   @ApiProperty()
   newPassword: string;
+}
+
+export class UpdateUserInfoInput {
+  @IsEmail()
+  @IsOptional()
+  @ApiProperty()
+  email: string;
+
+  @IsString()
+  @IsOptional()
+  @ApiProperty()
+  username: string;
+
+  @IsString()
+  @IsOptional()
+  @ApiProperty()
+  bio: string;
 }
 
 // --------------
@@ -63,4 +80,26 @@ export type DecodedToken = {
   email_verified: boolean;
   preferred_username: string;
   email: string;
+};
+
+export type TokenResponse = {
+  accessToken: string;
+  expiresIn: number;
+  refreshExpiresIn: number;
+  refreshToken: string;
+  tokenType: string;
+  notBeforePolicy: number;
+  sessionState: string;
+  scope: string;
+};
+
+export type SessionResponse = {
+  id: string;
+  username: string;
+  userId: string;
+  ipAddress: string;
+  start: number;
+  lastAccess: number;
+  rememberMe: boolean;
+  clients: object;
 };

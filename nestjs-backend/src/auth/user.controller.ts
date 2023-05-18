@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Headers, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthenticatedUser, Public } from 'nest-keycloak-connect';
-import { CreateUserInput, DecodedToken, LoginUserInput, UpdatePasswordInput, UserResponse } from './auth.model';
+import { CreateUserInput, DecodedToken, LoginUserInput, UpdateUserInfoInput, ChangeUserPasswordInput, UserResponse } from './auth.model';
 import { UserService } from './user.service';
 
 @Controller('api/users')
@@ -28,15 +28,25 @@ export class UserController {
   @ApiOperation({ summary: 'Get a currently authenticated user' })
   async getCurrentUser(@AuthenticatedUser() decodedToken: DecodedToken, @Headers() headers: string): Promise<UserResponse> {
     const accessToken = headers['authorization'].split(' ')[1];
-    return await this.userService.getCurrentUser(decodedToken, accessToken);
+    const userResponse = await this.userService.getCurrentUser(decodedToken);
+    return { ...userResponse, token: accessToken };
   }
 
   @Patch('password')
   @ApiOperation({ summary: 'Update user password' })
-  async changePassword(
+  async changeUserPassword(
     @AuthenticatedUser() decodedToken: DecodedToken,
-    @Body() changePasswordInput: UpdatePasswordInput
+    @Body() changeUserPasswordInput: ChangeUserPasswordInput
   ): Promise<UserResponse> {
-    return await this.userService.changePassword(decodedToken, changePasswordInput);
+    return await this.userService.changeUserPassword(decodedToken, changeUserPasswordInput);
+  }
+
+  @Patch()
+  @ApiOperation({ summary: 'Update user information' })
+  async updateUserInfo(
+    @AuthenticatedUser() decodedToken: DecodedToken,
+    @Body() updateUserInfoInput: UpdateUserInfoInput
+  ): Promise<UserResponse> {
+    return await this.userService.updateUserInfo(decodedToken, updateUserInfoInput);
   }
 }
