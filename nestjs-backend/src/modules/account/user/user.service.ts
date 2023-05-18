@@ -1,20 +1,23 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { KeycloakApiClientService } from './keycloak-api-client.service';
-import { CreateUserInput, DecodedToken, LoginUserInput, UpdateUserInfoInput, ChangeUserPasswordInput, UserResponse } from './auth.model';
-import { User } from '../entity';
-import { InvalidPasswordError } from './auth.error';
 import { isNil, omitBy, pick } from 'lodash';
+import { DecodedToken } from 'src/models/model';
+import { KeycloakApiClientService } from '../../auth/keycloak-api-client.service';
+import { User } from '../../../entities';
+import { InvalidPasswordError } from './user.error';
+import { ChangeUserPasswordInput, CreateUserInput, LoginUserInput, UpdateUserInfoInput, UserResponse } from './user.model';
 
-export const refreshTokenStore = new Map<string, string>(); // TODO: refresh tokne needs to be cached
+export const refreshTokenStore = new Map<string, string>(); // TODO: refresh token needs to be cached
 
 @Injectable()
 export class UserService {
   constructor(private dataSource: DataSource, private keycloakApiClientService: KeycloakApiClientService) {}
 
   /**
-   * @description Create a new Keycloak user and insert a new user entity
-   * @returns Created user with access token
+   * @description Create a new user account.
+   * It creates a new Keycloak user and inserts a new user entity.
+   * A new user session is created after successful user registration.
+   * @returns Created user with access token.
    */
   async createUser(createUserInput: CreateUserInput): Promise<UserResponse> {
     await this.keycloakApiClientService.createKeycloakUser(createUserInput);
@@ -27,8 +30,9 @@ export class UserService {
   }
 
   /**
-   * @description Authenticate a user with email and password
-   * @returns User with access token
+   * @description Authenticate a user with email and password.
+   * A new user session is created after successful login.
+   * @returns User with access token.
    */
   async loginUser(loginUserInput: LoginUserInput): Promise<UserResponse> {
     const { accessToken, refreshToken, sessionState } = await this.keycloakApiClientService.getUserTokenUsingPassword(
@@ -42,8 +46,8 @@ export class UserService {
   }
 
   /**
-   * @description Get a currently authenticated user
-   * @returns Current user with access token
+   * @description Get a currently authenticated user.
+   * @returns Current user with access token.
    */
   async getCurrentUser(decodedToken: DecodedToken): Promise<UserResponse> {
     const user = await this.dataSource.manager.findOneBy(User, { userId: decodedToken.sub });
@@ -51,8 +55,9 @@ export class UserService {
   }
 
   /**
-   * @description Change an existing password with a new password
-   * @returns Current user with access token
+   * @description Change an existing password with a new password.
+   * All existing sessions of the user are deleted and a new session is created after successful password update.
+   * @returns Current user with access token.
    */
   async changeUserPassword(decodedToken: DecodedToken, changeUserPasswordInput: ChangeUserPasswordInput): Promise<UserResponse> {
     const passwordIsValid = await this.keycloakApiClientService.isPasswordValid(decodedToken.email, changeUserPasswordInput.oldPassword);
@@ -73,6 +78,11 @@ export class UserService {
     return this.buildUserResponse(user, accessToken);
   }
 
+  /**
+   * @description Update user information.
+   * - A refresh token is used to extend the current user session and return a new access token.
+   * @returns Current user with access token.
+   */
   async updateUserInfo(decodedToken: DecodedToken, updateUserInfoInput: UpdateUserInfoInput): Promise<UserResponse> {
     const refreshToken = refreshTokenStore.get(decodedToken.sid); // TODO: validate refresh token expiration
     const newTokenObject = await this.keycloakApiClientService.getUserTokenUsingRefreshToken(refreshToken);
@@ -84,17 +94,17 @@ export class UserService {
   }
 
   /**
-   * @description Decode Keycloak access token from base64 to utf8
-   * @param token base64-encoded token
-   * @returns Decoded token
+   * @description Decode JWT from base64 to utf8.
+   * @param token Base64-encoded token.
+   * @returns Decoded token.
    */
   private decodeToken(token: string): DecodedToken {
     return JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
   }
 
   /**
-   * @description Build user response using user entity and encoded access token
-   * @returns User response
+   * @description Build user response using user entity and encoded access token.
+   * @returns User response.
    */
   private buildUserResponse(user: User, userAccessToken?: string): UserResponse {
     const { username, email, bio } = user;

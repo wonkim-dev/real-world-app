@@ -1,11 +1,10 @@
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Article, ArticleTagMapping, ArticleUserMapping, Comment, Tag, User, UserUserMapping } from 'src/entity';
+import { Article, ArticleTagMapping, ArticleUserMapping, Comment, Tag, User, UserUserMapping } from 'src/entities';
 
 const entities = [Article, ArticleTagMapping, ArticleUserMapping, Comment, Tag, User, UserUserMapping];
 
 export default TypeOrmModule.forRootAsync({
-  imports: [ConfigModule],
   inject: [ConfigService],
   useFactory: (configService: ConfigService) => ({
     type: 'postgres',

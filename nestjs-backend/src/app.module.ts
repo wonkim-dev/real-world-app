@@ -1,25 +1,15 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { KeycloakModule, KeycloakProviders } from './configuration/module-import/keycloak';
-import TypeOrmModule from './configuration/module-import/typeorm';
-import { ArticleModule } from './article/article.module';
-import { ProfileModule } from './profile/profile.module';
-import { AuthModule } from './auth/auth.module';
-import databaseConfig from './configuration/config/database.config';
-import iamConfig from './configuration/config/iam.config';
+import ConfigModule from './import/config.module';
+import { KeycloakModule, KeycloakProviders } from './import/keycloak.module';
+import TypeOrmModule from './import/typeorm.module';
+import { ArticleModule } from './modules/article/article.module';
+import { AccountModule } from './modules/account/account.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
-  imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env', load: [databaseConfig, iamConfig] }),
-    KeycloakModule, // TODO: Check vulnerability & deprecation of keycloak-connec package
-    TypeOrmModule,
-    ArticleModule,
-    ProfileModule,
-    AuthModule,
-  ],
+  imports: [ConfigModule, KeycloakModule, TypeOrmModule, ArticleModule, AccountModule, AuthModule],
   controllers: [AppController],
-  providers: [...KeycloakProviders, AppService],
+  providers: [...KeycloakProviders],
 })
 export class AppModule {}
