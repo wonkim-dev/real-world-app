@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Headers, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthenticatedUser, Public } from 'nest-keycloak-connect';
-import { DecodedToken } from 'src/models/model';
+import { DecodedAccessToken } from 'src/models/model';
 import { UserService } from './user.service';
 import { ChangeUserPasswordInput, CreateUserInput, LoginUserInput, UpdateUserInfoInput, UserResponse } from './user.model';
 
@@ -38,9 +38,9 @@ export class UserController {
     summary: 'Get a currently authenticated user. It does not create a new sessions, existing access token is returned instead.',
   })
   @ApiResponse({ type: UserResponse, status: 200 })
-  async getCurrentUser(@AuthenticatedUser() decodedToken: DecodedToken, @Headers() headers: string): Promise<UserResponse> {
+  async getCurrentUser(@AuthenticatedUser() decodedAccessToken: DecodedAccessToken, @Headers() headers: string): Promise<UserResponse> {
     const accessToken = headers['authorization'].split(' ')[1];
-    const userResponse = await this.userService.getCurrentUser(decodedToken);
+    const userResponse = await this.userService.getCurrentUser(decodedAccessToken);
     return { ...userResponse, token: accessToken };
   }
 
@@ -51,10 +51,10 @@ export class UserController {
   })
   @ApiResponse({ type: UserResponse, status: 200 })
   async changeUserPassword(
-    @AuthenticatedUser() decodedToken: DecodedToken,
+    @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
     @Body() changeUserPasswordInput: ChangeUserPasswordInput
   ): Promise<UserResponse> {
-    return await this.userService.changeUserPassword(decodedToken, changeUserPasswordInput);
+    return await this.userService.changeUserPassword(decodedAccessToken, changeUserPasswordInput);
   }
 
   @Patch()
@@ -64,9 +64,9 @@ export class UserController {
   })
   @ApiResponse({ type: UserResponse, status: 200 })
   async updateUserInfo(
-    @AuthenticatedUser() decodedToken: DecodedToken,
+    @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
     @Body() updateUserInfoInput: UpdateUserInfoInput
   ): Promise<UserResponse> {
-    return await this.userService.updateUserInfo(decodedToken, updateUserInfoInput);
+    return await this.userService.updateUserInfo(decodedAccessToken, updateUserInfoInput);
   }
 }

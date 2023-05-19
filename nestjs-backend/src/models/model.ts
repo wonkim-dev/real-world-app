@@ -1,4 +1,4 @@
-export type DecodedToken = {
+export type DecodedAccessToken = {
   exp: number;
   iat: number;
   jti: string;
@@ -17,4 +17,18 @@ export type DecodedToken = {
   email_verified: boolean;
   preferred_username: string;
   email: string;
+};
+
+export type DecodedRefreshToken = {
+  exp: number;
+  iat: number;
+  jti: string;
+  iss: string;
+  aud: string;
+  sub: string;
+  typ: string;
+  azp: string;
+  session_state: string;
+  scope: string;
+  sid: string;
 };

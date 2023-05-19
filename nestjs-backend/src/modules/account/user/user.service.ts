@@ -1,13 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { DataSource } from 'typeorm';
-import { isNil, omitBy, pick } from 'lodash';
-import { DecodedToken } from 'src/models/model';
-import { KeycloakApiClientService } from '../../auth/keycloak-api-client.service';
-import { User } from '../../../entities';
-import { InvalidPasswordError } from './user.error';
-import { ChangeUserPasswordInput, CreateUserInput, LoginUserInput, UpdateUserInfoInput, UserResponse } from './user.model';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
+import { DataSource } from 'typeorm';
+import { isNil, omitBy, pick } from 'lodash';
+import { DateTime } from 'luxon';
+import { createHash } from 'crypto';
+import { DecodedAccessToken, DecodedRefreshToken } from 'src/models/model';
+import { KeycloakApiClientService } from '../../auth/keycloak-api-client.service';
+import { User } from '../../../entities';
+import { UserInvalidPasswordError, UserRefreshTokenExpiredError } from './user.error';
+import { ChangeUserPasswordInput, CreateUserInput, LoginUserInput, UpdateUserInfoInput, UserResponse } from './user.model';
 
 @Injectable()
 export class UserService {
@@ -27,9 +29,11 @@ export class UserService {
     await this.keycloakApiClientService.createKeycloakUser(createUserInput);
     const { username, email, password } = createUserInput;
     const { accessToken, refreshToken, sessionState } = await this.keycloakApiClientService.getUserTokenUsingPassword(username, password);
-    const decodedToken = this.decodeToken(accessToken);
-    await this.cacheManager.set(sessionState, refreshToken);
-    const user = await this.dataSource.manager.save(User, { userId: decodedToken.sub, username, email });
+    const decodedNewRefreshToken = this.decodeToken<DecodedRefreshToken>(refreshToken);
+    const ttlMilliseconds = this.calculateTtlInMillis(decodedNewRefreshToken.exp);
+    const hashedNewRefreshToken = this.hashToken(refreshToken);
+    await this.cacheManager.set(sessionState, hashedNewRefreshToken, ttlMilliseconds);
+    const user = await this.dataSource.manager.save(User, { userId: decodedNewRefreshToken.sub, username, email });
     return this.buildUserResponse(user, accessToken);
   }
 
@@ -43,9 +47,11 @@ export class UserService {
       loginUserInput.email,
       loginUserInput.password
     );
-    const decodedToken = this.decodeToken(accessToken);
-    await this.cacheManager.set(sessionState, refreshToken);
-    const user = await this.dataSource.manager.findOneBy(User, { userId: decodedToken.sub });
+    const decodedNewRefreshToken = this.decodeToken<DecodedRefreshToken>(refreshToken);
+    const ttlMilliseconds = this.calculateTtlInMillis(decodedNewRefreshToken.exp);
+    const hashedNewRefreshToken = this.hashToken(refreshToken);
+    await this.cacheManager.set(sessionState, hashedNewRefreshToken, ttlMilliseconds);
+    const user = await this.dataSource.manager.findOneBy(User, { userId: decodedNewRefreshToken.sub });
     return this.buildUserResponse(user, accessToken);
   }
 
@@ -53,8 +59,8 @@ export class UserService {
    * @description Get a currently authenticated user.
    * @returns Current user with access token.
    */
-  async getCurrentUser(decodedToken: DecodedToken): Promise<UserResponse> {
-    const user = await this.dataSource.manager.findOneBy(User, { userId: decodedToken.sub });
+  async getCurrentUser(decodedAccessToken: DecodedAccessToken): Promise<UserResponse> {
+    const user = await this.dataSource.manager.findOneBy(User, { userId: decodedAccessToken.sub });
     return this.buildUserResponse(user);
   }
 
@@ -63,24 +69,33 @@ export class UserService {
    * All existing sessions of the user are deleted and a new session is created after successful password update.
    * @returns Current user with access token.
    */
-  async changeUserPassword(decodedToken: DecodedToken, changeUserPasswordInput: ChangeUserPasswordInput): Promise<UserResponse> {
-    const passwordIsValid = await this.keycloakApiClientService.isPasswordValid(decodedToken.email, changeUserPasswordInput.oldPassword);
+  async changeUserPassword(
+    decodedAccessToken: DecodedAccessToken,
+    changeUserPasswordInput: ChangeUserPasswordInput
+  ): Promise<UserResponse> {
+    const passwordIsValid = await this.keycloakApiClientService.isPasswordValid(
+      decodedAccessToken.email,
+      changeUserPasswordInput.oldPassword
+    );
     if (!passwordIsValid) {
-      throw new InvalidPasswordError();
+      throw new UserInvalidPasswordError();
     }
-    await this.keycloakApiClientService.changePassword(decodedToken.sub, changeUserPasswordInput.newPassword);
-    const userOldSessions = await this.keycloakApiClientService.getSessionsByUserId(decodedToken.sub);
-    await this.keycloakApiClientService.deleteSessionsByUserId(decodedToken.sub);
+    await this.keycloakApiClientService.changePassword(decodedAccessToken.sub, changeUserPasswordInput.newPassword);
+    const userOldSessions = await this.keycloakApiClientService.getSessionsByUserId(decodedAccessToken.sub);
+    await this.keycloakApiClientService.deleteSessionsByUserId(decodedAccessToken.sub);
     const userOldSessionIds = userOldSessions.map((oldSession) => oldSession.id);
     for (const oldSessionId of userOldSessionIds) {
       await this.cacheManager.del(oldSessionId);
     }
     const { accessToken, refreshToken, sessionState } = await this.keycloakApiClientService.getUserTokenUsingPassword(
-      decodedToken.email,
+      decodedAccessToken.email,
       changeUserPasswordInput.newPassword
     );
-    await this.cacheManager.set(sessionState, refreshToken);
-    const user = await this.dataSource.manager.findOneBy(User, { userId: decodedToken.sub });
+    const decodedNewRefreshToken = this.decodeToken<DecodedRefreshToken>(refreshToken);
+    const ttlMilliseconds = this.calculateTtlInMillis(decodedNewRefreshToken.exp);
+    const hashedNewRefreshToken = this.hashToken(refreshToken);
+    await this.cacheManager.set(sessionState, hashedNewRefreshToken, ttlMilliseconds);
+    const user = await this.dataSource.manager.findOneBy(User, { userId: decodedAccessToken.sub });
     return this.buildUserResponse(user, accessToken);
   }
 
@@ -89,14 +104,20 @@ export class UserService {
    * - A refresh token is used to extend the current user session and return a new access token.
    * @returns Current user with access token.
    */
-  async updateUserInfo(decodedToken: DecodedToken, updateUserInfoInput: UpdateUserInfoInput): Promise<UserResponse> {
-    const refreshToken = await this.cacheManager.get<string>(decodedToken.sid);
-    const newTokenObject = await this.keycloakApiClientService.getUserTokenUsingRefreshToken(refreshToken);
-    await this.cacheManager.set(newTokenObject.sessionState, newTokenObject.refreshToken);
+  async updateUserInfo(decodedAccessToken: DecodedAccessToken, updateUserInfoInput: UpdateUserInfoInput): Promise<UserResponse> {
+    const cachedRefreshToken = await this.cacheManager.get<string>(decodedAccessToken.sid);
+    if (!cachedRefreshToken) {
+      throw new UserRefreshTokenExpiredError();
+    }
+    const newTokenResponse = await this.keycloakApiClientService.getUserTokenUsingRefreshToken(cachedRefreshToken);
+    const decodedNewRefreshToken = this.decodeToken<DecodedRefreshToken>(newTokenResponse.refreshToken);
+    const ttlMilliseconds = this.calculateTtlInMillis(decodedNewRefreshToken.exp);
+    const hashedNewRefreshToken = this.hashToken(newTokenResponse.refreshToken);
+    await this.cacheManager.set(newTokenResponse.sessionState, hashedNewRefreshToken, ttlMilliseconds);
     const updateKeycloakUserInput = omitBy(pick(updateUserInfoInput, ['email', 'username']), isNil);
-    await this.keycloakApiClientService.updateUserInfo(decodedToken.sub, updateKeycloakUserInput);
-    const user = await this.dataSource.manager.findOneBy(User, { userId: decodedToken.sub });
-    return this.buildUserResponse(user, newTokenObject.accessToken);
+    await this.keycloakApiClientService.updateUserInfo(decodedAccessToken.sub, updateKeycloakUserInput);
+    const user = await this.dataSource.manager.findOneBy(User, { userId: decodedAccessToken.sub });
+    return this.buildUserResponse(user, newTokenResponse.accessToken);
   }
 
   /**
@@ -104,8 +125,29 @@ export class UserService {
    * @param token Base64-encoded token.
    * @returns Decoded token.
    */
-  private decodeToken(token: string): DecodedToken {
+  private decodeToken<T>(token: string): T {
     return JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+  }
+
+  /**
+   * @description Calculate TTL from now upto the given epoch seconds.
+   * @param expiryEpochSeconds Epoch seconds of expiry date time.
+   * @returns TTL as milliseconds.
+   */
+  private calculateTtlInMillis(expiryEpochSeconds: number): number {
+    const nowInEpochSeconds = DateTime.now().toSeconds();
+    const ttlSeconds = expiryEpochSeconds - nowInEpochSeconds;
+    const ttlMilliseconds = Math.ceil(ttlSeconds) * 1000;
+    return ttlMilliseconds;
+  }
+
+  /**
+   * @description Hash JWT using sha256 algorithm.
+   * @returns Hashed JWT
+   */
+  private hashToken(token: string): string {
+    const hash = createHash('sha256');
+    return hash.update(token).digest('hex');
   }
 
   /**
