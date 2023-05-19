@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { isNil, omitBy, pick } from 'lodash';
 import { DecodedToken } from 'src/models/model';
@@ -6,12 +6,16 @@ import { KeycloakApiClientService } from '../../auth/keycloak-api-client.service
 import { User } from '../../../entities';
 import { InvalidPasswordError } from './user.error';
 import { ChangeUserPasswordInput, CreateUserInput, LoginUserInput, UpdateUserInfoInput, UserResponse } from './user.model';
-
-export const refreshTokenStore = new Map<string, string>(); // TODO: refresh token needs to be cached
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 @Injectable()
 export class UserService {
-  constructor(private dataSource: DataSource, private keycloakApiClientService: KeycloakApiClientService) {}
+  constructor(
+    private dataSource: DataSource,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private keycloakApiClientService: KeycloakApiClientService
+  ) {}
 
   /**
    * @description Create a new user account.
@@ -24,7 +28,7 @@ export class UserService {
     const { username, email, password } = createUserInput;
     const { accessToken, refreshToken, sessionState } = await this.keycloakApiClientService.getUserTokenUsingPassword(username, password);
     const decodedToken = this.decodeToken(accessToken);
-    refreshTokenStore.set(sessionState, refreshToken);
+    await this.cacheManager.set(sessionState, refreshToken);
     const user = await this.dataSource.manager.save(User, { userId: decodedToken.sub, username, email });
     return this.buildUserResponse(user, accessToken);
   }
@@ -40,7 +44,7 @@ export class UserService {
       loginUserInput.password
     );
     const decodedToken = this.decodeToken(accessToken);
-    refreshTokenStore.set(sessionState, refreshToken);
+    await this.cacheManager.set(sessionState, refreshToken);
     const user = await this.dataSource.manager.findOneBy(User, { userId: decodedToken.sub });
     return this.buildUserResponse(user, accessToken);
   }
@@ -68,12 +72,14 @@ export class UserService {
     const userOldSessions = await this.keycloakApiClientService.getSessionsByUserId(decodedToken.sub);
     await this.keycloakApiClientService.deleteSessionsByUserId(decodedToken.sub);
     const userOldSessionIds = userOldSessions.map((oldSession) => oldSession.id);
-    userOldSessionIds.forEach((oldSessionId) => refreshTokenStore.delete(oldSessionId));
+    for (const oldSessionId of userOldSessionIds) {
+      await this.cacheManager.del(oldSessionId);
+    }
     const { accessToken, refreshToken, sessionState } = await this.keycloakApiClientService.getUserTokenUsingPassword(
       decodedToken.email,
       changeUserPasswordInput.newPassword
     );
-    refreshTokenStore.set(sessionState, refreshToken);
+    await this.cacheManager.set(sessionState, refreshToken);
     const user = await this.dataSource.manager.findOneBy(User, { userId: decodedToken.sub });
     return this.buildUserResponse(user, accessToken);
   }
@@ -84,9 +90,9 @@ export class UserService {
    * @returns Current user with access token.
    */
   async updateUserInfo(decodedToken: DecodedToken, updateUserInfoInput: UpdateUserInfoInput): Promise<UserResponse> {
-    const refreshToken = refreshTokenStore.get(decodedToken.sid); // TODO: validate refresh token expiration
+    const refreshToken = await this.cacheManager.get<string>(decodedToken.sid);
     const newTokenObject = await this.keycloakApiClientService.getUserTokenUsingRefreshToken(refreshToken);
-    refreshTokenStore.set(newTokenObject.sessionState, newTokenObject.refreshToken);
+    await this.cacheManager.set(newTokenObject.sessionState, newTokenObject.refreshToken);
     const updateKeycloakUserInput = omitBy(pick(updateUserInfoInput, ['email', 'username']), isNil);
     await this.keycloakApiClientService.updateUserInfo(decodedToken.sub, updateKeycloakUserInput);
     const user = await this.dataSource.manager.findOneBy(User, { userId: decodedToken.sub });

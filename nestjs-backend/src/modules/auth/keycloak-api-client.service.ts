@@ -236,7 +236,7 @@ export class KeycloakApiClientService {
    * @description Catch error thrown from Keycloak admin API and throw it with proper message.
    */
   private logAndThrowKeycloakApiError(error: any): Promise<void> {
-    this.logger.error(error.response?.data || error.response?.statusText || error.response || error, error.stack);
+    this.logger.error(error.response?.data || error.response?.statusText || error.message || error, error.stack);
     if (error.response) {
       throw new HttpException(error.response.data || error.response.statusText, error.response.status);
     }
