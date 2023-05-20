@@ -27,3 +27,5 @@ export type SessionResponse = {
   rememberMe: boolean;
   clients: object;
 };
+
+export type EncryptedData = { encryptedTextHex: string; ivHex: string; authTagHex: string };

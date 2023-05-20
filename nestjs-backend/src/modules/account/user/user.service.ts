@@ -2,11 +2,12 @@ import { Inject, Injectable } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { DataSource } from 'typeorm';
-import { isNil, omitBy, pick } from 'lodash';
+import { isEmpty, isNil, omitBy, pick } from 'lodash';
 import { DateTime } from 'luxon';
-import { createHash } from 'crypto';
-import { DecodedAccessToken, DecodedRefreshToken } from 'src/models/model';
+import { DecodedAccessToken, DecodedRefreshToken } from '../../../models/model';
+import { EncryptedData } from '../../auth/models/auth.model';
 import { KeycloakApiClientService } from '../../auth/keycloak-api-client.service';
+import { EncryptionService } from '../../auth/encryption.service';
 import { User } from '../../../entities';
 import { UserInvalidPasswordError, UserRefreshTokenExpiredError } from './user.error';
 import { ChangeUserPasswordInput, CreateUserInput, LoginUserInput, UpdateUserInfoInput, UserResponse } from './user.model';
@@ -16,7 +17,8 @@ export class UserService {
   constructor(
     private dataSource: DataSource,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
-    private keycloakApiClientService: KeycloakApiClientService
+    private keycloakApiClientService: KeycloakApiClientService,
+    private encryptionService: EncryptionService
   ) {}
 
   /**
@@ -31,8 +33,8 @@ export class UserService {
     const { accessToken, refreshToken, sessionState } = await this.keycloakApiClientService.getUserTokenUsingPassword(username, password);
     const decodedNewRefreshToken = this.decodeToken<DecodedRefreshToken>(refreshToken);
     const ttlMilliseconds = this.calculateTtlInMillis(decodedNewRefreshToken.exp);
-    const hashedNewRefreshToken = this.hashToken(refreshToken);
-    await this.cacheManager.set(sessionState, hashedNewRefreshToken, ttlMilliseconds);
+    const encryptedNewRefreshToken = this.encryptionService.encrypt(refreshToken);
+    await this.cacheManager.set(sessionState, encryptedNewRefreshToken, ttlMilliseconds);
     const user = await this.dataSource.manager.save(User, { userId: decodedNewRefreshToken.sub, username, email });
     return this.buildUserResponse(user, accessToken);
   }
@@ -49,8 +51,8 @@ export class UserService {
     );
     const decodedNewRefreshToken = this.decodeToken<DecodedRefreshToken>(refreshToken);
     const ttlMilliseconds = this.calculateTtlInMillis(decodedNewRefreshToken.exp);
-    const hashedNewRefreshToken = this.hashToken(refreshToken);
-    await this.cacheManager.set(sessionState, hashedNewRefreshToken, ttlMilliseconds);
+    const encryptedNewRefreshToken = this.encryptionService.encrypt(refreshToken);
+    await this.cacheManager.set(sessionState, encryptedNewRefreshToken, ttlMilliseconds);
     const user = await this.dataSource.manager.findOneBy(User, { userId: decodedNewRefreshToken.sub });
     return this.buildUserResponse(user, accessToken);
   }
@@ -91,10 +93,9 @@ export class UserService {
       decodedAccessToken.email,
       changeUserPasswordInput.newPassword
     );
-    const decodedNewRefreshToken = this.decodeToken<DecodedRefreshToken>(refreshToken);
-    const ttlMilliseconds = this.calculateTtlInMillis(decodedNewRefreshToken.exp);
-    const hashedNewRefreshToken = this.hashToken(refreshToken);
-    await this.cacheManager.set(sessionState, hashedNewRefreshToken, ttlMilliseconds);
+    const ttlMilliseconds = this.getRefreshTokenTtlInMillis(refreshToken);
+    const encryptedNewRefreshToken = this.encryptionService.encrypt(refreshToken);
+    await this.cacheManager.set(sessionState, encryptedNewRefreshToken, ttlMilliseconds);
     const user = await this.dataSource.manager.findOneBy(User, { userId: decodedAccessToken.sub });
     return this.buildUserResponse(user, accessToken);
   }
@@ -105,19 +106,30 @@ export class UserService {
    * @returns Current user with access token.
    */
   async updateUserInfo(decodedAccessToken: DecodedAccessToken, updateUserInfoInput: UpdateUserInfoInput): Promise<UserResponse> {
-    const cachedRefreshToken = await this.cacheManager.get<string>(decodedAccessToken.sid);
-    if (!cachedRefreshToken) {
+    const encryptedData = await this.cacheManager.get<EncryptedData>(decodedAccessToken.sid);
+    if (!encryptedData) {
       throw new UserRefreshTokenExpiredError();
     }
+    const cachedRefreshToken = this.encryptionService.decrypt(encryptedData);
     const newTokenResponse = await this.keycloakApiClientService.getUserTokenUsingRefreshToken(cachedRefreshToken);
-    const decodedNewRefreshToken = this.decodeToken<DecodedRefreshToken>(newTokenResponse.refreshToken);
-    const ttlMilliseconds = this.calculateTtlInMillis(decodedNewRefreshToken.exp);
-    const hashedNewRefreshToken = this.hashToken(newTokenResponse.refreshToken);
-    await this.cacheManager.set(newTokenResponse.sessionState, hashedNewRefreshToken, ttlMilliseconds);
-    const updateKeycloakUserInput = omitBy(pick(updateUserInfoInput, ['email', 'username']), isNil);
-    await this.keycloakApiClientService.updateUserInfo(decodedAccessToken.sub, updateKeycloakUserInput);
+    const ttlMilliseconds = this.getRefreshTokenTtlInMillis(newTokenResponse.refreshToken);
+    const encryptedNewRefreshToken = this.encryptionService.encrypt(newTokenResponse.refreshToken);
+    await this.cacheManager.set(decodedAccessToken.sid, encryptedNewRefreshToken, ttlMilliseconds);
+    await this.updateKeycloakUserAndEntity(decodedAccessToken.sub, updateUserInfoInput);
     const user = await this.dataSource.manager.findOneBy(User, { userId: decodedAccessToken.sub });
     return this.buildUserResponse(user, newTokenResponse.accessToken);
+  }
+
+  /**
+   * @description Update information in Keycloak and entity
+   */
+  private async updateKeycloakUserAndEntity(userId: string, updateUserInfoInput: UpdateUserInfoInput): Promise<void> {
+    const updateKeycloakUserInput = omitBy(pick(updateUserInfoInput, ['email', 'username']), isNil);
+    await this.keycloakApiClientService.updateUserInfo(userId, updateKeycloakUserInput);
+    const updateUserEntityInput = omitBy(pick(updateUserInfoInput, ['bio']), isNil);
+    if (!isEmpty(updateUserEntityInput)) {
+      await this.dataSource.manager.update(User, { userId }, updateUserEntityInput);
+    }
   }
 
   /**
@@ -130,6 +142,16 @@ export class UserService {
   }
 
   /**
+   * @description Calculate refresh token TTL used when storing it in Redis store.
+   * @returns TTL as milliseconds.
+   */
+  private getRefreshTokenTtlInMillis(refreshToken: string): number {
+    const decodedNewRefreshToken = this.decodeToken<DecodedRefreshToken>(refreshToken);
+    const ttlMilliseconds = this.calculateTtlInMillis(decodedNewRefreshToken.exp);
+    return ttlMilliseconds;
+  }
+
+  /**
    * @description Calculate TTL from now upto the given epoch seconds.
    * @param expiryEpochSeconds Epoch seconds of expiry date time.
    * @returns TTL as milliseconds.
@@ -139,15 +161,6 @@ export class UserService {
     const ttlSeconds = expiryEpochSeconds - nowInEpochSeconds;
     const ttlMilliseconds = Math.ceil(ttlSeconds) * 1000;
     return ttlMilliseconds;
-  }
-
-  /**
-   * @description Hash JWT using sha256 algorithm.
-   * @returns Hashed JWT
-   */
-  private hashToken(token: string): string {
-    const hash = createHash('sha256');
-    return hash.update(token).digest('hex');
   }
 
   /**
