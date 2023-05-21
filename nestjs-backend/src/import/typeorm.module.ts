@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Article, ArticleTagMapping, ArticleUserMapping, Comment, Tag, User, UserUserMapping } from 'src/entities';
+import { Article, ArticleTagMapping, ArticleUserMapping, Comment, Tag, User, UserUserMapping } from '../entities';
 
 const entities = [Article, ArticleTagMapping, ArticleUserMapping, Comment, Tag, User, UserUserMapping];
 
