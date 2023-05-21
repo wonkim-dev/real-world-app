@@ -62,15 +62,21 @@ export class UpdateUserInfoInput {
   bio: string;
 }
 
+export class RefreshTokenInput {
+  @IsString()
+  @ApiProperty()
+  sessionId: string;
+}
+
 export class UserResponse {
-  @ApiProperty()
+  @ApiProperty({ example: 'jake' })
   username: string;
-  @ApiProperty()
+  @ApiProperty({ example: 'jake@email.com' })
   email: string;
-  @ApiProperty()
+  @ApiProperty({ example: 'I am the first user of the app!' })
   bio: string;
-  @ApiProperty()
+  @ApiProperty({ example: 'https://api.realworld.io/images/smiley-cyrus.jpg' })
   image: string;
-  @ApiProperty()
-  token: string;
+  @ApiProperty({ example: 'jwt.token.here' })
+  accessToken: string;
 }
