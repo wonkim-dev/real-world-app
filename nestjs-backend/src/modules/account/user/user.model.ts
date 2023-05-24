@@ -46,11 +46,6 @@ export class ChangeUserPasswordInput {
 }
 
 export class UpdateUserInfoInput {
-  @IsEmail()
-  @IsOptional()
-  @ApiProperty()
-  email: string;
-
   @IsString()
   @IsOptional()
   @ApiProperty()

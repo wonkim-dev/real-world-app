@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Patch, Post, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { AuthenticatedUser, Public } from 'nest-keycloak-connect';
@@ -32,12 +32,13 @@ export class UserController {
   }
 
   @Post('login')
+  @HttpCode(200)
   @Public()
   @ApiOperation({
     summary:
       'Authenticate a user using email and password. A new user session is created after successful login. Access token for the newly created session is returned.',
   })
-  @ApiResponse({ type: UserResponse, status: 201 })
+  @ApiResponse({ type: UserResponse, status: 200 })
   async loginUser(@Body() loginUserInput: LoginUserInput, @Res({ passthrough: true }) res: Response): Promise<UserResponse> {
     return await this.userService.loginUser(res, loginUserInput);
   }
@@ -84,9 +85,10 @@ export class UserController {
   }
 
   @Post('refresh')
+  @HttpCode(200)
   @Public()
   @ApiOperation({ summary: 'Extend a current user session by creating a new access token using refresh token.' })
-  @ApiResponse({ type: UserResponse, status: 201 })
+  @ApiResponse({ type: UserResponse, status: 200 })
   async refreshAccessToken(
     @Res({ passthrough: true }) res: Response,
     @RefreshToken() refreshToken: string,

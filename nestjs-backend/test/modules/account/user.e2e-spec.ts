@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import * as request from 'supertest';
+import * as cookieParser from 'cookie-parser';
 import databaseConfig from '../../../src/configs/database.config';
 import iamConfig from '../../../src/configs/iam.config';
 import cacheConfig from '../../../src/configs/cache-store.config';
@@ -12,13 +13,22 @@ import { KeycloakModule, KeycloakProviders } from '../../../src/import/keycloak.
 import TypeOrmModule from '../../../src/import/typeorm.module';
 import CacheModule from '../../../src/import/cache.module';
 import { HelperModule } from '../../helper/modules/helper.module';
-import { DecodedAccessToken } from '../../../src/models/model';
+import { DecodedAccessToken, DecodedRefreshToken } from '../../../src/models/model';
 import { KeycloakApiClientHelperService } from '../../helper/modules/keycloak-api-client-helper.service';
 import { User } from '../../../src/entities';
+import { UserInvalidRefreshTokenError, UserMissingRefreshTokenError } from '../../../src/modules/account/user/user.error';
 
-enum KeycloakApiErrorMessage {
+enum KeycloakAdminApiErrorMessage {
   UserNameExists = 'User exists with same username',
   EmailExists = 'User exists with same email',
+  InvalidUserCredentials = 'Invalid user credentials',
+}
+
+enum KeycloakAdminApiErrorCode {
+  InvalidPassword = 'invalid_password',
+}
+
+enum NestKeycloakConnectErrorMessage {
   Unauthorized = 'Unauthorized',
 }
 
@@ -31,6 +41,10 @@ describe('User', () => {
   let app: INestApplication;
   let dataSource: DataSource;
   let keycloakApiClientHelperService: KeycloakApiClientHelperService;
+  const endpointApiUsers = '/api/users';
+  const endpointApiUsersLogin = '/api/users/login';
+  const endpointApiUsersPassword = '/api/users/password';
+  const endpointApiUsersRefresh = '/api/users/refresh';
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -51,6 +65,7 @@ describe('User', () => {
     }).compile();
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(new ValidationPipe());
+    app.use(cookieParser());
     await app.init();
 
     dataSource = moduleRef.get(DataSource);
@@ -58,19 +73,19 @@ describe('User', () => {
   });
 
   describe('POST /api/users', () => {
-    const endpoint = '/api/users';
     const USER_INPUT = { email: 'e2e-test@email.com', password: 'e2e-test-password', username: 'e2e-test-username' };
     let userId: string;
 
-    afterAll(async () => {
-      await keycloakApiClientHelperService.deleteKeycloakUser(userId);
-      await dataSource.manager.delete(User, { userId });
-    });
-
     describe('Positive tests', () => {
-      it('should create a new user', async () => {
+      afterEach(async () => {
+        // Delete created user
+        await keycloakApiClientHelperService.deleteKeycloakUser(userId);
+        await dataSource.manager.delete(User, { userId });
+      });
+
+      it('should create a new user with all fields', async () => {
         // ACT
-        const res = await request(app.getHttpServer()).post(endpoint).send(USER_INPUT);
+        const res = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT);
         // ASSERT
         const decodedAccessToken: DecodedAccessToken = JSON.parse(
           Buffer.from(res.body.accessToken.split('.')[1], 'base64').toString('utf8')
@@ -90,51 +105,66 @@ describe('User', () => {
         username: 'e2e-test-negative-username',
       };
 
+      beforeAll(async () => {
+        // Create a mock user
+        const res = await request(app.getHttpServer()).post('/api/users').send(USER_INPUT);
+        const decodedAccessToken: DecodedAccessToken = JSON.parse(
+          Buffer.from(res.body.accessToken.split('.')[1], 'base64').toString('utf8')
+        );
+        userId = decodedAccessToken.sub;
+      });
+
+      afterAll(async () => {
+        // Delete mock user
+        await keycloakApiClientHelperService.deleteKeycloakUser(userId);
+        await dataSource.manager.delete(User, { userId });
+      });
+
       it('should fail if username already exist', async () => {
         // ARRANGE
         const body = { ...inputForNegativeTest, username: USER_INPUT.username };
         // ACT
-        const res = await request(app.getHttpServer()).post(endpoint).send(body);
+        const res = await request(app.getHttpServer()).post(endpointApiUsers).send(body);
         // ASSERT
         expect(res.status).toBe(409);
-        expect(res.body.errorMessage).toBe(KeycloakApiErrorMessage.UserNameExists);
+        expect(res.body.errorMessage).toBe(KeycloakAdminApiErrorMessage.UserNameExists);
       });
 
       it('should fail if email already exist', async () => {
         // ARRANGE
         const body = { ...inputForNegativeTest, email: USER_INPUT.email };
         // ACT
-        const res = await request(app.getHttpServer()).post(endpoint).send(body);
+        const res = await request(app.getHttpServer()).post(endpointApiUsers).send(body);
         // ASSERT
         expect(res.status).toBe(409);
-        expect(res.body.errorMessage).toBe(KeycloakApiErrorMessage.EmailExists);
+        expect(res.body.errorMessage).toBe(KeycloakAdminApiErrorMessage.EmailExists);
       });
 
       it('should fail if email is invalid', async () => {
         // ARRANGE
         const body = { ...inputForNegativeTest, email: 'invalidEmail' };
         // ACT
-        const res = await request(app.getHttpServer()).post(endpoint).send(body);
+        const res = await request(app.getHttpServer()).post(endpointApiUsers).send(body);
         // ASSERT
         expect(res.status).toBe(400);
         expect(res.body.message).toEqual(expect.arrayContaining([ClassValidatorErrorMessage.InvalidEmail]));
       });
 
-      it('should fail if required field is missing', async () => {
+      it('should fail if required field (password) is missing', async () => {
         // ARRANGE
         const body = { username: inputForNegativeTest.username, email: inputForNegativeTest.email };
         // ACT
-        const res = await request(app.getHttpServer()).post(endpoint).send(body);
+        const res = await request(app.getHttpServer()).post(endpointApiUsers).send(body);
         // ASSERT
         expect(res.status).toBe(400);
         expect(res.body.message).toEqual(expect.arrayContaining([ClassValidatorErrorMessage.EmptyPassword]));
       });
 
-      it('should fail if required field is null', async () => {
+      it('should fail if required field (password) is null', async () => {
         // ARRANGE
         const body = { username: inputForNegativeTest.username, email: inputForNegativeTest.email, password: null };
         // ACT
-        const res = await request(app.getHttpServer()).post(endpoint).send(body);
+        const res = await request(app.getHttpServer()).post(endpointApiUsers).send(body);
         // ASSERT
         expect(res.status).toBe(400);
         expect(res.body.message).toEqual(expect.arrayContaining([ClassValidatorErrorMessage.EmptyPassword]));
@@ -143,19 +173,20 @@ describe('User', () => {
   });
 
   describe('GET /api/users', () => {
-    const endpoint = '/api/users';
     const USER_INPUT = { email: 'e2e-test@email.com', password: 'e2e-test-password', username: 'e2e-test-username' };
     let accessToken: string;
     let userId: string;
 
     beforeAll(async () => {
-      const res = await request(app.getHttpServer()).post(endpoint).send(USER_INPUT);
+      // Create a mock user
+      const res = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT);
       accessToken = res.body.accessToken;
       const decodedAccessToken: DecodedAccessToken = JSON.parse(Buffer.from(res.body.accessToken.split('.')[1], 'base64').toString('utf8'));
       userId = decodedAccessToken.sub;
     });
 
     afterAll(async () => {
+      // Delete mock user
       await keycloakApiClientHelperService.deleteKeycloakUser(userId);
       await dataSource.manager.delete(User, { userId });
     });
@@ -163,7 +194,7 @@ describe('User', () => {
     describe('Positive tests', () => {
       it('should get a current user', async () => {
         // ACT
-        const res = await request(app.getHttpServer()).get(endpoint).set('Authorization', `Bearer ${accessToken}`);
+        const res = await request(app.getHttpServer()).get(endpointApiUsers).set('Authorization', `Bearer ${accessToken}`);
         // ASSERT
         expect(res.status).toBe(200);
         expect(res.body.email).toBe(USER_INPUT.email);
@@ -174,18 +205,342 @@ describe('User', () => {
     describe('Negative tests', () => {
       it('should fail if authorization header is missing', async () => {
         // ACT
-        const res = await request(app.getHttpServer()).get(endpoint);
+        const res = await request(app.getHttpServer()).get(endpointApiUsers);
         // ASSERT
         expect(res.status).toBe(401);
-        expect(res.body.message).toBe(KeycloakApiErrorMessage.Unauthorized);
+        expect(res.body.message).toBe(NestKeycloakConnectErrorMessage.Unauthorized);
       });
 
       it('should fail if access token is invalid', async () => {
         // ACT
-        const res = await request(app.getHttpServer()).get(endpoint).set('Authorization', `Bearer invalidToken`);
+        const res = await request(app.getHttpServer()).get(endpointApiUsers).set('Authorization', `Bearer invalidToken`);
         // ASSERT
         expect(res.status).toBe(401);
-        expect(res.body.message).toBe(KeycloakApiErrorMessage.Unauthorized);
+        expect(res.body.message).toBe(NestKeycloakConnectErrorMessage.Unauthorized);
+      });
+    });
+  });
+
+  describe('PATCH /api/users', () => {
+    const USER_INPUT_1 = { email: 'e2e-test-1@email.com', password: 'e2e-test-password-1', username: 'e2e-test-username-1' };
+    const USER_INPUT_2 = { email: 'e2e-test-2@email.com', password: 'e2e-test-password-2', username: 'e2e-test-username-2' };
+    let accessToken1: string;
+    let userId1: string;
+    let userId2: string;
+
+    describe('Positive tests', () => {
+      beforeEach(async () => {
+        // Create a mock user
+        const res = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT_1);
+        accessToken1 = res.body.accessToken;
+        const decodedAccessToken1: DecodedAccessToken = JSON.parse(
+          Buffer.from(res.body.accessToken.split('.')[1], 'base64').toString('utf8')
+        );
+        userId1 = decodedAccessToken1.sub;
+      });
+
+      afterEach(async () => {
+        // Delete mock user
+        await keycloakApiClientHelperService.deleteKeycloakUser(userId1);
+        await dataSource.manager.delete(User, { userId: userId1 });
+      });
+
+      it('should update user information', async () => {
+        // ARRANGE
+        const body = { username: 'e2e-test-username-update', bio: 'e2e-test-bio-update' };
+        // ACT
+        const res = await request(app.getHttpServer()).patch(endpointApiUsers).set('Authorization', `Bearer ${accessToken1}`).send(body);
+        // ASSERT
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual(expect.objectContaining(body));
+        const decodedAccessToken: DecodedAccessToken = JSON.parse(
+          Buffer.from(res.body.accessToken.split('.')[1], 'base64').toString('utf8')
+        );
+        expect(decodedAccessToken.preferred_username).toBe(body.username);
+      });
+    });
+
+    describe('Negative tests', () => {
+      beforeAll(async () => {
+        // Create mock user 1
+        const res1 = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT_1);
+        accessToken1 = res1.body.accessToken;
+        const decodedAccessToken1: DecodedAccessToken = JSON.parse(
+          Buffer.from(res1.body.accessToken.split('.')[1], 'base64').toString('utf8')
+        );
+        userId1 = decodedAccessToken1.sub;
+        // Create mock user 2
+        const res2 = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT_2);
+        const decodedAccessToken2: DecodedAccessToken = JSON.parse(
+          Buffer.from(res2.body.accessToken.split('.')[1], 'base64').toString('utf8')
+        );
+        userId2 = decodedAccessToken2.sub;
+      });
+
+      afterAll(async () => {
+        // Delete mock users
+        await keycloakApiClientHelperService.deleteKeycloakUser(userId1);
+        await dataSource.manager.delete(User, { userId: userId1 });
+        await keycloakApiClientHelperService.deleteKeycloakUser(userId2);
+        await dataSource.manager.delete(User, { userId: userId2 });
+      });
+
+      it('should fail if email already exists', async () => {
+        // ARRANGE
+        const body = { username: USER_INPUT_2.username, bio: 'new-e2e-test-bio' };
+        // ACT: Update username of user 1 to the same username of user 2
+        const res = await request(app.getHttpServer()).patch(endpointApiUsers).set('Authorization', `Bearer ${accessToken1}`).send(body);
+        // ASSERT
+        expect(res.status).toBe(409);
+      });
+
+      it('should fail if access token is invalid', async () => {
+        // ARRANGE
+        const body = { username: USER_INPUT_2.username, bio: 'new-e2e-test-bio' };
+        // ACT
+        const res = await request(app.getHttpServer()).patch(endpointApiUsers).set('Authorization', `Bearer invalidToken`).send(body);
+        // ASSERT
+        expect(res.status).toBe(401);
+        expect(res.body.message).toBe(NestKeycloakConnectErrorMessage.Unauthorized);
+      });
+
+      it('should fail if access token is missing', async () => {
+        // ARRANGE
+        const body = { username: USER_INPUT_2.username, bio: 'new-e2e-test-bio' };
+        // ACT
+        const res = await request(app.getHttpServer()).patch(endpointApiUsers).send(body);
+        // ASSERT
+        expect(res.status).toBe(401);
+        expect(res.body.message).toBe(NestKeycloakConnectErrorMessage.Unauthorized);
+      });
+    });
+  });
+
+  describe('POST /api/users/login', () => {
+    const USER_INPUT = { email: 'e2e-test@email.com', password: 'e2e-test-password', username: 'e2e-test-username' };
+    let userId: string;
+    let accessToken: string;
+
+    describe('Positive tests', () => {
+      // Create a mock user
+      beforeAll(async () => {
+        const res = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT);
+        accessToken = res.body.accessToken;
+        const decodedAccessToken: DecodedAccessToken = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString('utf8'));
+        userId = decodedAccessToken.sub;
+      });
+
+      afterAll(async () => {
+        // Delete mock user
+        await keycloakApiClientHelperService.deleteKeycloakUser(userId);
+        await dataSource.manager.delete(User, { userId: userId });
+      });
+
+      it('should login a user', async () => {
+        // ARRANGE
+        const body = { email: USER_INPUT.email, password: USER_INPUT.password };
+        // ACT
+        const res = await request(app.getHttpServer()).post(endpointApiUsersLogin).send(body);
+        // ASSERT
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual(expect.objectContaining({ email: USER_INPUT.email, username: USER_INPUT.username }));
+      });
+    });
+
+    describe('Negative tests', () => {
+      // Create a mock user
+      beforeAll(async () => {
+        const res = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT);
+        accessToken = res.body.accessToken;
+        const decodedAccessToken: DecodedAccessToken = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString('utf8'));
+        userId = decodedAccessToken.sub;
+      });
+
+      // Delete mock user
+      afterAll(async () => {
+        await keycloakApiClientHelperService.deleteKeycloakUser(userId);
+        await dataSource.manager.delete(User, { userId: userId });
+      });
+
+      it('should fail with wrong password', async () => {
+        // ARRANGE
+        const body = { email: USER_INPUT.email, password: 'wrongPassword' };
+        // ACT
+        const res = await request(app.getHttpServer()).post(endpointApiUsersLogin).send(body);
+        // ASSERT
+        expect(res.status).toBe(401);
+        expect(res.body.error_description).toBe(KeycloakAdminApiErrorMessage.InvalidUserCredentials);
+      });
+
+      it('should fail with missing password', async () => {
+        // ARRANGE
+        const body = { email: USER_INPUT.email };
+        // ACT
+        const res = await request(app.getHttpServer()).post(endpointApiUsersLogin).send(body);
+        // ASSERT
+        expect(res.status).toBe(400);
+        expect(res.body.message).toEqual(expect.arrayContaining([ClassValidatorErrorMessage.EmptyPassword]));
+      });
+    });
+  });
+
+  describe('PATCH /api/users/password', () => {
+    const USER_INPUT = { email: 'e2e-test@email.com', password: 'e2e-test-password', username: 'e2e-test-username' };
+    let userId: string;
+    let accessToken: string;
+
+    describe('Positive tests', () => {
+      // Create a mock user
+      beforeEach(async () => {
+        const res = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT);
+        accessToken = res.body.accessToken;
+        const decodedAccessToken: DecodedAccessToken = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString('utf8'));
+        userId = decodedAccessToken.sub;
+      });
+
+      afterEach(async () => {
+        // Delete mock user
+        await keycloakApiClientHelperService.deleteKeycloakUser(userId);
+        await dataSource.manager.delete(User, { userId: userId });
+      });
+
+      it('should change password', async () => {
+        // ARRANGE
+        const body = { oldPassword: USER_INPUT.password, newPassword: 'newPassword' };
+        // ACT
+        const res = await request(app.getHttpServer())
+          .patch(endpointApiUsersPassword)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .send(body);
+        // ASSERT
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual(expect.objectContaining({ email: USER_INPUT.email, username: USER_INPUT.username }));
+      });
+    });
+
+    describe('Negative tests', () => {
+      // Create a mock user
+      beforeAll(async () => {
+        const res = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT);
+        accessToken = res.body.accessToken;
+        const decodedAccessToken: DecodedAccessToken = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString('utf8'));
+        userId = decodedAccessToken.sub;
+      });
+
+      afterAll(async () => {
+        // Delete mock user
+        await keycloakApiClientHelperService.deleteKeycloakUser(userId);
+        await dataSource.manager.delete(User, { userId: userId });
+      });
+
+      it('should fail with wrong old password', async () => {
+        // ARRANGE
+        const body = { oldPassword: 'wrongPassword', newPassword: 'newPassword' };
+        // ACT
+        const res = await request(app.getHttpServer())
+          .patch(endpointApiUsersPassword)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .send(body);
+        // ASSERT
+        expect(res.status).toBe(401);
+        expect(res.body.error).toBe(KeycloakAdminApiErrorCode.InvalidPassword);
+      });
+
+      it('should fail with missing old password', async () => {
+        // ARRANGE
+        const body = { newPassword: 'newPassword' };
+        // ACT
+        const res = await request(app.getHttpServer())
+          .patch(endpointApiUsersPassword)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .send(body);
+        // ASSERT
+        expect(res.status).toBe(400);
+      });
+
+      it('should fail with missing new password', async () => {
+        // ARRANGE
+        const body = { oldPassword: 'oldPassword' };
+        // ACT
+        const res = await request(app.getHttpServer())
+          .patch(endpointApiUsersPassword)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .send(body);
+        // ASSERT
+        expect(res.status).toBe(400);
+      });
+    });
+  });
+
+  describe('POST /api/users/refresh', () => {
+    const USER_INPUT = { email: 'e2e-test@email.com', password: 'e2e-test-password', username: 'e2e-test-username' };
+    let userId: string;
+    let accessToken: string;
+
+    // Create a mock user
+    beforeAll(async () => {
+      const res = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT);
+      accessToken = res.body.accessToken;
+      const decodedAccessToken: DecodedRefreshToken = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString('utf8'));
+      userId = decodedAccessToken.sub;
+    });
+
+    afterAll(async () => {
+      // Delete mock user
+      await keycloakApiClientHelperService.deleteKeycloakUser(userId);
+      await dataSource.manager.delete(User, { userId: userId });
+    });
+
+    describe('Positive tests', () => {
+      it('should get a new token using refresh token', async () => {
+        // ARRANGE
+        const agent = request.agent(app.getHttpServer());
+        const loginResult = await agent.post('/api/users/login').send({ email: USER_INPUT.email, password: USER_INPUT.password });
+        const loginDecodedAccessToken: DecodedAccessToken = JSON.parse(
+          Buffer.from(loginResult.body.accessToken.split('.')[1], 'base64').toString('utf8')
+        );
+        const body = { sessionId: loginDecodedAccessToken.sid };
+        // ACT
+        const res = await agent.post(endpointApiUsersRefresh).send(body);
+        // ASSERT
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual(expect.objectContaining({ email: USER_INPUT.email, username: USER_INPUT.username }));
+      });
+    });
+
+    describe('Negative tests', () => {
+      it('should fail if refresh token is missing in the request', async () => {
+        // ARRANGE
+        const loginResult = await request(app.getHttpServer())
+          .post('/api/users/login')
+          .send({ email: USER_INPUT.email, password: USER_INPUT.password });
+        const loginDecodedAccessToken: DecodedAccessToken = JSON.parse(
+          Buffer.from(loginResult.body.accessToken.split('.')[1], 'base64').toString('utf8')
+        );
+        const body = { sessionId: loginDecodedAccessToken.sid };
+        try {
+          // ACT
+          await request(app.getHttpServer()).post(endpointApiUsersRefresh).send(body);
+        } catch (error) {
+          // ASSERT
+          expect(error).toBeInstanceOf(UserMissingRefreshTokenError);
+          expect(error.body.code).toEqual(UserMissingRefreshTokenError.code);
+        }
+      });
+
+      it('should fail if session id in the body is invalid', async () => {
+        // ARRANGE
+        const agent = request.agent(app.getHttpServer());
+        await agent.post('/api/users/login').send({ email: USER_INPUT.email, password: USER_INPUT.password });
+        const body = { sessionId: 'invalidSessionId' };
+        try {
+          // ACT
+          await agent.post(endpointApiUsersRefresh).send(body);
+        } catch (error) {
+          // ASSERT
+          expect(error).toBeInstanceOf(UserInvalidRefreshTokenError);
+          expect(error.body.code).toEqual(UserInvalidRefreshTokenError.code);
+        }
       });
     });
   });

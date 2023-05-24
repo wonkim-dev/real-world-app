@@ -8,6 +8,14 @@ export class UserInvalidPasswordError extends UnauthorizedException {
   }
 }
 
+export class UserMissingRefreshTokenError extends UnauthorizedException {
+  static code = 'missing_refresh_token';
+  static message = 'Refresh token is missing in the request. Please log in again to continue';
+  constructor() {
+    super(UserMissingRefreshTokenError.message, UserMissingRefreshTokenError.code);
+  }
+}
+
 export class UserRefreshTokenExpiredError extends UnauthorizedException {
   static code = 'refresh_token_expired';
   static message = 'Your session has expired. Please log in again to continue.';

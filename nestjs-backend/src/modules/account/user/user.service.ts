@@ -10,7 +10,12 @@ import { EncryptedData } from '../../auth/models/auth.model';
 import { KeycloakApiClientService } from '../../auth/keycloak-api-client.service';
 import { EncryptionService } from '../../auth/encryption.service';
 import { User } from '../../../entities';
-import { UserInvalidPasswordError, UserInvalidRefreshTokenError, UserRefreshTokenExpiredError } from './user.error';
+import {
+  UserInvalidPasswordError,
+  UserInvalidRefreshTokenError,
+  UserRefreshTokenExpiredError,
+  UserMissingRefreshTokenError,
+} from './user.error';
 import {
   ChangeUserPasswordInput,
   CreateUserInput,
@@ -132,13 +137,13 @@ export class UserService {
     if (!encryptedData) {
       throw new UserRefreshTokenExpiredError();
     }
+    await this.updateKeycloakUserAndEntity(decodedAccessToken.sub, updateUserInfoInput);
     const cachedRefreshToken = this.encryptionService.decrypt(encryptedData);
     const newTokenResponse = await this.keycloakApiClientService.getUserTokenUsingRefreshToken(cachedRefreshToken);
     const decodedNewRefreshToken = this.decodeToken<DecodedRefreshToken>(newTokenResponse.refreshToken);
     const encryptedNewRefreshToken = this.encryptionService.encrypt(newTokenResponse.refreshToken);
     const { ttlMilliseconds, ttlSeconds } = this.calculateTtlUsingExpiryEpochSeconds(decodedNewRefreshToken.exp);
     await this.cacheManager.set(decodedAccessToken.sid, encryptedNewRefreshToken, ttlMilliseconds);
-    await this.updateKeycloakUserAndEntity(decodedAccessToken.sub, updateUserInfoInput);
     const user = await this.dataSource.manager.findOneBy(User, { userId: decodedAccessToken.sub });
     this.setRefreshTokenInHttpOnlyCookie(res, newTokenResponse.refreshToken, ttlSeconds);
     return this.buildUserResponse(user, newTokenResponse.accessToken);
@@ -150,7 +155,7 @@ export class UserService {
    */
   async refreshAccessToken(res: Response, refreshToken: string, refreshTokenInput: RefreshTokenInput): Promise<UserResponse> {
     if (!refreshToken) {
-      throw new UserRefreshTokenExpiredError();
+      throw new UserMissingRefreshTokenError();
     }
     const encryptedData = await this.cacheManager.get<EncryptedData>(refreshTokenInput.sessionId);
     if (!encryptedData) {
@@ -174,9 +179,9 @@ export class UserService {
    * @description Update information in Keycloak and entity
    */
   private async updateKeycloakUserAndEntity(userId: string, updateUserInfoInput: UpdateUserInfoInput): Promise<void> {
-    const updateKeycloakUserInput = omitBy(pick(updateUserInfoInput, ['email', 'username']), isNil);
+    const updateKeycloakUserInput = omitBy(pick(updateUserInfoInput, ['username']), isNil);
     await this.keycloakApiClientService.updateUserInfo(userId, updateKeycloakUserInput);
-    const updateUserEntityInput = omitBy(pick(updateUserInfoInput, ['bio']), isNil);
+    const updateUserEntityInput = omitBy(pick(updateUserInfoInput, ['username', 'bio']), isNil);
     if (!isEmpty(updateUserEntityInput)) {
       await this.dataSource.manager.update(User, { userId }, updateUserEntityInput);
     }
