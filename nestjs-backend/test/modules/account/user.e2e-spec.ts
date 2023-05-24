@@ -12,9 +12,9 @@ import { AuthModule } from '../../../src/modules/auth/auth.module';
 import { KeycloakModule, KeycloakProviders } from '../../../src/import/keycloak.module';
 import TypeOrmModule from '../../../src/import/typeorm.module';
 import CacheModule from '../../../src/import/cache.module';
-import { HelperModule } from '../../helper/modules/helper.module';
+import { TestHelperModule } from '../../helper/test-helper.module';
 import { DecodedAccessToken, DecodedRefreshToken } from '../../../src/models/model';
-import { KeycloakApiClientHelperService } from '../../helper/modules/keycloak-api-client-helper.service';
+import { KeycloakApiClientHelperService } from '../../helper/keycloak-api-client-helper.service';
 import { User } from '../../../src/entities';
 import { UserInvalidRefreshTokenError, UserMissingRefreshTokenError } from '../../../src/modules/account/user/user.error';
 
@@ -59,7 +59,7 @@ describe('User', () => {
         KeycloakModule,
         TypeOrmModule,
         CacheModule, // FIXME:  Redis client needs to be close to make Jest exit from the test correctly. Currently --forceExit is used to exit by force.
-        HelperModule,
+        TestHelperModule,
       ],
       providers: [...KeycloakProviders],
     }).compile();

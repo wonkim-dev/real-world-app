@@ -6,4 +6,4 @@ import { KeycloakApiClientHelperService } from './keycloak-api-client-helper.ser
   imports: [HttpModule],
   providers: [KeycloakApiClientHelperService],
 })
-export class HelperModule {}
+export class TestHelperModule {}
