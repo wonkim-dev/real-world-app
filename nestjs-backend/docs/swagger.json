@@ -1,0 +1,147 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/health": { "get": { "operationId": "AppController_getHello", "parameters": [], "responses": { "200": { "description": "" } } } },
+    "/api/users": {
+      "post": {
+        "operationId": "UserController_createUser",
+        "summary": "Create a new user. It creates a new Keycloak user and inserts a new user entity. A new user session is created after successful user registration.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateUserInput" } } }
+        },
+        "responses": {
+          "201": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserResponse" } } } },
+          "400": { "description": "Invalid input" },
+          "409": { "description": "Username or email already exists" }
+        },
+        "tags": ["users"],
+        "security": [{ "bearer": [] }]
+      },
+      "get": {
+        "operationId": "UserController_getCurrentUser",
+        "summary": "Get a currently authenticated user. Authentication is required.",
+        "description": "It does not create a new sessions, existing access token is returned instead.",
+        "parameters": [],
+        "responses": {
+          "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserResponse" } } } },
+          "401": { "description": "Authentication failed" }
+        },
+        "tags": ["users"],
+        "security": [{ "bearer": [] }]
+      },
+      "patch": {
+        "operationId": "UserController_updateUserInfo",
+        "summary": "Update user information such as username, bio, image. Authentication is required.",
+        "description": "A refresh token stored in backend is used to extend the current user session after successful update. A newly issued access token is returned.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateUserInfoInput" } } }
+        },
+        "responses": {
+          "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserResponse" } } } },
+          "401": { "description": "Authentication failed" },
+          "409": { "description": "Username already exists" }
+        },
+        "tags": ["users"],
+        "security": [{ "bearer": [] }]
+      }
+    },
+    "/api/users/login": {
+      "post": {
+        "operationId": "UserController_loginUser",
+        "summary": "Authenticate a user using email and password. A new user session is created after successful login. Access token for the newly created session is returned.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginUserInput" } } }
+        },
+        "responses": {
+          "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserResponse" } } } },
+          "400": { "description": "Invalid input" },
+          "401": { "description": "Authentication failed" }
+        },
+        "tags": ["users"],
+        "security": [{ "bearer": [] }]
+      }
+    },
+    "/api/users/password": {
+      "patch": {
+        "operationId": "UserController_changeUserPassword",
+        "summary": "Update user password. Authentication is required.",
+        "description": "All existing sessions of the user are deleted and a new session is created after successful password update.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChangeUserPasswordInput" } } }
+        },
+        "responses": {
+          "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserResponse" } } } },
+          "400": { "description": "Invalid input" },
+          "401": { "description": "Authentication failed" }
+        },
+        "tags": ["users"],
+        "security": [{ "bearer": [] }]
+      }
+    },
+    "/api/users/refresh": {
+      "post": {
+        "operationId": "UserController_refreshAccessToken",
+        "summary": "Extend a current user session by creating a new access token using refresh token.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RefreshTokenInput" } } }
+        },
+        "responses": {
+          "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserResponse" } } } },
+          "401": { "description": "Authentication failed" }
+        },
+        "tags": ["users"],
+        "security": [{ "bearer": [] }]
+      }
+    }
+  },
+  "info": { "title": "Real World Application", "description": "The REST API for Real World Application", "version": "1.0", "contact": {} },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": { "bearer": { "scheme": "bearer", "bearerFormat": "JWT", "type": "http" } },
+    "schemas": {
+      "CreateUserInput": {
+        "type": "object",
+        "properties": { "email": { "type": "string" }, "username": { "type": "string" }, "password": { "type": "string" } },
+        "required": ["email", "username", "password"]
+      },
+      "UserResponse": {
+        "type": "object",
+        "properties": {
+          "username": { "type": "string", "example": "jake" },
+          "email": { "type": "string", "example": "jake@email.com" },
+          "bio": { "type": "string", "example": "I am the first user of the app!" },
+          "image": { "type": "string", "example": "https://api.realworld.io/images/smiley-cyrus.jpg" },
+          "accessToken": { "type": "string", "example": "jwt.token.here" }
+        },
+        "required": ["username", "email", "bio", "image", "accessToken"]
+      },
+      "LoginUserInput": {
+        "type": "object",
+        "properties": { "email": { "type": "string" }, "password": { "type": "string" } },
+        "required": ["email", "password"]
+      },
+      "ChangeUserPasswordInput": {
+        "type": "object",
+        "properties": { "oldPassword": { "type": "string" }, "newPassword": { "type": "string" } },
+        "required": ["oldPassword", "newPassword"]
+      },
+      "UpdateUserInfoInput": {
+        "type": "object",
+        "properties": { "username": { "type": "string" }, "bio": { "type": "string" } },
+        "required": ["username", "bio"]
+      },
+      "RefreshTokenInput": { "type": "object", "properties": { "sessionId": { "type": "string" } }, "required": ["sessionId"] }
+    }
+  }
+}

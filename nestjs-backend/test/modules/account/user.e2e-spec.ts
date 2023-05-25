@@ -285,7 +285,7 @@ describe('User', () => {
         await dataSource.manager.delete(User, { userId: userId2 });
       });
 
-      it('should fail if email already exists', async () => {
+      it('should fail if username already exists', async () => {
         // ARRANGE
         const body = { username: USER_INPUT_2.username, bio: 'new-e2e-test-bio' };
         // ACT: Update username of user 1 to the same username of user 2
