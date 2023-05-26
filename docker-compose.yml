@@ -5,6 +5,8 @@ volumes:
     driver: local
   redis-data:
     driver: local
+  minio-data:
+    driver: local
 
 services:
   postgres:
@@ -31,11 +33,26 @@ services:
       - redis-data:/data
     command: redis-server --save "${REDIS_SAVE}" --requirepass "${REDIS_PASSWORD}" --loglevel warning
 
+  minio:
+    container_name: minio
+    image: quay.io/minio/minio:RELEASE.2023-05-18T00-05-36Z
+    ports:
+      - 9000:9000
+      - 9001:9001
+    volumes:
+      - minio-data:/data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+
   keycloak:
     container_name: keycloak
     image: quay.io/keycloak/keycloak:21.1.1
     ports:
       - 8080:8080
+    depends_on:
+      - postgres
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
