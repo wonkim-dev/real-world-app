@@ -7,9 +7,10 @@ import CacheModule from './import/cache.module';
 import { ArticleModule } from './modules/article/article.module';
 import { AccountModule } from './modules/account/account.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { FileModule } from './modules/file/file.module';
 
 @Module({
-  imports: [ConfigModule, KeycloakModule, TypeOrmModule, CacheModule, ArticleModule, AccountModule, AuthModule],
+  imports: [ConfigModule, KeycloakModule, TypeOrmModule, CacheModule, ArticleModule, AccountModule, AuthModule, FileModule],
   controllers: [AppController],
   providers: [...KeycloakProviders],
 })

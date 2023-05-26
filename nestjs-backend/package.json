@@ -38,6 +38,7 @@
     "keycloak-connect": "^21.0.0",
     "lodash": "^4.17.21",
     "luxon": "^3.3.0",
+    "minio": "^7.1.1",
     "nest-keycloak-connect": "^1.9.1",
     "pg": "^8.10.0",
     "reflect-metadata": "^0.1.13",
