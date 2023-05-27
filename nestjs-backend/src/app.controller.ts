@@ -3,11 +3,9 @@ import { Public } from 'nest-keycloak-connect';
 
 @Controller()
 export class AppController {
-  constructor() {}
-
   @Get('health')
   @Public()
-  getHello(): string {
+  getHealth(): string {
     return 'OK';
   }
 }

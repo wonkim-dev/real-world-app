@@ -3,9 +3,10 @@ import databaseConfig from '../configs/database.config';
 import iamConfig from '../configs/iam.config';
 import cacheConfig from '../configs/cache-store.config';
 import objectStorageConfig from '../configs/object-storage.config';
+import backendConfig from '../configs/backend.config';
 
 export default ConfigModule.forRoot({
   isGlobal: true,
   envFilePath: '.env',
-  load: [databaseConfig, iamConfig, cacheConfig, objectStorageConfig],
+  load: [databaseConfig, iamConfig, cacheConfig, objectStorageConfig, backendConfig],
 });

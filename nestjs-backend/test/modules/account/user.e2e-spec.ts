@@ -7,11 +7,14 @@ import * as cookieParser from 'cookie-parser';
 import databaseConfig from '../../../src/configs/database.config';
 import iamConfig from '../../../src/configs/iam.config';
 import cacheConfig from '../../../src/configs/cache-store.config';
+import backendConfig from '../../../src/configs/backend.config';
+import objectStorageConfig from '../../../src/configs/object-storage.config';
 import { AccountModule } from '../../../src/modules/account/account.module';
 import { AuthModule } from '../../../src/modules/auth/auth.module';
-import { KeycloakModule, KeycloakProviders } from '../../../src/import/keycloak.module';
+import { KeycloakModule, KEYCLOAK_PROVIDERS } from '../../../src/import/keycloak.module';
 import TypeOrmModule from '../../../src/import/typeorm.module';
 import CacheModule from '../../../src/import/cache.module';
+import { FileModule } from '../../../src/modules/file/file.module';
 import { TestHelperModule } from '../../helper/test-helper.module';
 import { DecodedAccessToken, DecodedRefreshToken } from '../../../src/models/model';
 import { KeycloakApiClientHelperService } from '../../helper/keycloak-api-client-helper.service';
@@ -52,16 +55,17 @@ describe('User', () => {
         ConfigModule.forRoot({
           isGlobal: true,
           envFilePath: '.env.e2e',
-          load: [databaseConfig, iamConfig, cacheConfig],
+          load: [databaseConfig, iamConfig, cacheConfig, objectStorageConfig, backendConfig],
         }),
         AccountModule,
         AuthModule,
         KeycloakModule,
         TypeOrmModule,
         CacheModule, // FIXME:  Redis client needs to be close to make Jest exit from the test correctly. Currently --forceExit is used to exit by force.
+        FileModule,
         TestHelperModule,
       ],
-      providers: [...KeycloakProviders],
+      providers: [...KEYCLOAK_PROVIDERS],
     }).compile();
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(new ValidationPipe());

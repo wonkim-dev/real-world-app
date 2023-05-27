@@ -1,9 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
-// ----------
-// Input DTO
-// ----------
 export class CreateUserInput {
   @IsEmail()
   @IsNotEmpty()

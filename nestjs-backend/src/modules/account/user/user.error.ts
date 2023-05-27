@@ -1,10 +1,26 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 
 export class UserInvalidPasswordError extends UnauthorizedException {
   static code = 'invalid_password';
   static message = 'Incorrect password. Please try again.';
   constructor() {
     super(UserInvalidPasswordError.message, UserInvalidPasswordError.code);
+  }
+}
+
+export class UserAvatarFileTypeNotAllowedError extends BadRequestException {
+  static code = 'avatar_file_type_not_allowed';
+  constructor(mimeTypeList: string) {
+    const message = 'Invalid avatar image type. Only following mime types are allowed for avatar images: ' + mimeTypeList;
+    super(message, UserAvatarFileTypeNotAllowedError.code);
+  }
+}
+
+export class UserAvatarFileSizeTooBigError extends BadRequestException {
+  static code = 'avatar_file_size_too_big';
+  constructor(maxFileSizeInKb: number) {
+    const message = `Avatar image file is too big. Please reduce the file size and try gain. Maximum file size is ${maxFileSizeInKb} KB.`;
+    super(message, UserAvatarFileSizeTooBigError.code);
   }
 }
 

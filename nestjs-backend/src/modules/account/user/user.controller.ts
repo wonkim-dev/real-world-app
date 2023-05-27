@@ -1,13 +1,16 @@
-import { Body, Controller, Get, HttpCode, Patch, Post, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Patch, Post, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiBody,
   ApiConflictResponse,
+  ApiConsumes,
   ApiOperation,
   ApiResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { AuthenticatedUser, Public } from 'nest-keycloak-connect';
 import { DecodedAccessToken } from 'src/models/model';
@@ -87,20 +90,34 @@ export class UserController {
   }
 
   @Patch()
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
-    summary: 'Update user information such as username, bio, image. Authentication is required.',
+    summary: 'Update user information such as username, bio, avatar image. Authentication is required.',
     description:
       'A refresh token stored in backend is used to extend the current user session after successful update. A newly issued access token is returned.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        username: { type: 'string', nullable: true },
+        bio: { type: 'string', nullable: true },
+        avatar: { type: 'string', format: 'binary' },
+      },
+    },
   })
   @ApiResponse({ type: UserResponse, status: 200 })
   @ApiUnauthorizedResponse({ description: 'Authentication failed' })
   @ApiConflictResponse({ description: 'Username already exists' })
+  @UseInterceptors(FileInterceptor('avatar'))
   async updateUserInfo(
     @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
     @Res({ passthrough: true }) res: Response,
-    @Body() updateUserInfoInput: UpdateUserInfoInput
+    @Body() updateUserInfoInput: UpdateUserInfoInput,
+    @UploadedFile('file')
+    avatar?: Express.Multer.File
   ): Promise<UserResponse> {
-    return await this.userService.updateUserInfo(res, decodedAccessToken, updateUserInfoInput);
+    return await this.userService.updateUserInfo(res, decodedAccessToken, updateUserInfoInput, avatar);
   }
 
   @Post('refresh')

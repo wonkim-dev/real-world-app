@@ -2,6 +2,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard, KeycloakConnectModule, ResourceGuard, RoleGuard } from 'nest-keycloak-connect';
 
+// eslint-disable-next-line @typescript-eslint/naming-convention
 export const KeycloakModule = KeycloakConnectModule.registerAsync({
   inject: [ConfigService],
   useFactory: (configService: ConfigService) => ({
@@ -12,7 +13,7 @@ export const KeycloakModule = KeycloakConnectModule.registerAsync({
   }),
 });
 
-export const KeycloakProviders = [
+export const KEYCLOAK_PROVIDERS = [
   { provide: APP_GUARD, useClass: AuthGuard },
   { provide: APP_GUARD, useClass: ResourceGuard },
   { provide: APP_GUARD, useClass: RoleGuard },

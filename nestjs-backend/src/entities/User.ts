@@ -20,6 +20,9 @@ export class User {
   @Column('text', { name: 'bio', nullable: true })
   bio: string | null;
 
+  @Column('character varying', { name: 'avatar_path', nullable: true, length: 255 })
+  avatarPath: string | null;
+
   @Column('timestamp with time zone', {
     name: 'created_at',
     nullable: true,

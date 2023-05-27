@@ -1,20 +1,25 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Response } from 'express';
 import { Cache } from 'cache-manager';
 import { DataSource } from 'typeorm';
 import { isEmpty, isNil, omitBy, pick } from 'lodash';
 import { DateTime } from 'luxon';
+import * as mime from 'mime-types';
 import { DecodedAccessToken, DecodedRefreshToken } from '../../../models/model';
 import { EncryptedData } from '../../auth/models/auth.model';
 import { KeycloakApiClientService } from '../../auth/keycloak-api-client.service';
 import { EncryptionService } from '../../auth/encryption.service';
+import { MinioClientService } from '../../file/minio-client.service';
 import { User } from '../../../entities';
 import {
   UserInvalidPasswordError,
   UserInvalidRefreshTokenError,
   UserRefreshTokenExpiredError,
   UserMissingRefreshTokenError,
+  UserAvatarFileTypeNotAllowedError,
+  UserAvatarFileSizeTooBigError,
 } from './user.error';
 import {
   ChangeUserPasswordInput,
@@ -32,11 +37,16 @@ enum RefreshTokenHttpOnlyCookieOption {
 
 @Injectable()
 export class UserService {
+  allowedMimeTypesForAvatar = this.config.get<string>('backend.fileAllowedMimeTypesForAvatar');
+  maxFileSizeInKbForAvatar = this.config.get<number>('backend.fileMaxFileSizeInKbForAvatar');
+
   constructor(
+    private config: ConfigService,
     private dataSource: DataSource,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private keycloakApiClientService: KeycloakApiClientService,
-    private encryptionService: EncryptionService
+    private encryptionService: EncryptionService,
+    private minioClientService: MinioClientService
   ) {}
 
   /**
@@ -55,7 +65,13 @@ export class UserService {
     await this.cacheManager.set(sessionState, encryptedNewRefreshToken, ttlMilliseconds);
     const user = await this.dataSource.manager.save(User, { userId: decodedNewRefreshToken.sub, username, email });
     this.setRefreshTokenInHttpOnlyCookie(res, refreshToken, ttlSeconds);
-    return this.buildUserResponse(user, accessToken);
+    return {
+      username: user.username,
+      email: user.email,
+      bio: user.bio,
+      image: null,
+      accessToken,
+    };
   }
 
   /**
@@ -73,8 +89,18 @@ export class UserService {
     const { ttlMilliseconds, ttlSeconds } = this.calculateTtlUsingExpiryEpochSeconds(decodedNewRefreshToken.exp);
     await this.cacheManager.set(sessionState, encryptedNewRefreshToken, ttlMilliseconds);
     const user = await this.dataSource.manager.findOneBy(User, { userId: decodedNewRefreshToken.sub });
+    let presignedAvatarUrl: string;
+    if (user.avatarPath) {
+      presignedAvatarUrl = await this.minioClientService.getPresignedDownloadUrl(user.avatarPath);
+    }
     this.setRefreshTokenInHttpOnlyCookie(res, refreshToken, ttlSeconds);
-    return this.buildUserResponse(user, accessToken);
+    return {
+      username: user.username,
+      email: user.email,
+      bio: user.bio,
+      image: presignedAvatarUrl || null,
+      accessToken,
+    };
   }
 
   /**
@@ -83,7 +109,17 @@ export class UserService {
    */
   async getCurrentUser(decodedAccessToken: DecodedAccessToken): Promise<UserResponse> {
     const user = await this.dataSource.manager.findOneBy(User, { userId: decodedAccessToken.sub });
-    return this.buildUserResponse(user);
+    let presignedAvatarUrl: string;
+    if (user.avatarPath) {
+      presignedAvatarUrl = await this.minioClientService.getPresignedDownloadUrl(user.avatarPath);
+    }
+    return {
+      username: user.username,
+      email: user.email,
+      bio: user.bio,
+      image: presignedAvatarUrl || null,
+      accessToken: null,
+    };
   }
 
   /**
@@ -119,8 +155,18 @@ export class UserService {
     const { ttlMilliseconds, ttlSeconds } = this.calculateTtlUsingExpiryEpochSeconds(decodedNewRefreshToken.exp);
     await this.cacheManager.set(sessionState, encryptedNewRefreshToken, ttlMilliseconds);
     const user = await this.dataSource.manager.findOneBy(User, { userId: decodedAccessToken.sub });
+    let presignedAvatarUrl: string;
+    if (user.avatarPath) {
+      presignedAvatarUrl = await this.minioClientService.getPresignedDownloadUrl(user.avatarPath);
+    }
     this.setRefreshTokenInHttpOnlyCookie(res, refreshToken, ttlSeconds);
-    return this.buildUserResponse(user, accessToken);
+    return {
+      username: user.username,
+      email: user.email,
+      bio: user.bio,
+      image: presignedAvatarUrl || null,
+      accessToken,
+    };
   }
 
   /**
@@ -131,22 +177,40 @@ export class UserService {
   async updateUserInfo(
     res: Response,
     decodedAccessToken: DecodedAccessToken,
-    updateUserInfoInput: UpdateUserInfoInput
+    updateUserInfoInput: UpdateUserInfoInput,
+    avatar: Express.Multer.File
   ): Promise<UserResponse> {
     const encryptedData = await this.cacheManager.get<EncryptedData>(decodedAccessToken.sid);
     if (!encryptedData) {
       throw new UserRefreshTokenExpiredError();
     }
-    await this.updateKeycloakUserAndEntity(decodedAccessToken.sub, updateUserInfoInput);
+    let avatarPath: string;
+    if (avatar) {
+      this.validateAvatarImageOrFail(avatar);
+      const extension = mime.extension(avatar.mimetype);
+      avatarPath = `users/${decodedAccessToken.sub}/avatar.${extension}`;
+      await this.minioClientService.uploadFile(avatarPath, avatar.buffer, avatar.size);
+    }
+    await this.updateKeycloakUser(decodedAccessToken.sub, updateUserInfoInput);
+    const user = await this.updateUser(decodedAccessToken.sub, updateUserInfoInput, avatarPath);
     const cachedRefreshToken = this.encryptionService.decrypt(encryptedData);
     const newTokenResponse = await this.keycloakApiClientService.getUserTokenUsingRefreshToken(cachedRefreshToken);
     const decodedNewRefreshToken = this.decodeToken<DecodedRefreshToken>(newTokenResponse.refreshToken);
     const encryptedNewRefreshToken = this.encryptionService.encrypt(newTokenResponse.refreshToken);
     const { ttlMilliseconds, ttlSeconds } = this.calculateTtlUsingExpiryEpochSeconds(decodedNewRefreshToken.exp);
     await this.cacheManager.set(decodedAccessToken.sid, encryptedNewRefreshToken, ttlMilliseconds);
-    const user = await this.dataSource.manager.findOneBy(User, { userId: decodedAccessToken.sub });
+    let presignedAvatarUrl: string;
+    if (user.avatarPath) {
+      presignedAvatarUrl = await this.minioClientService.getPresignedDownloadUrl(user.avatarPath);
+    }
     this.setRefreshTokenInHttpOnlyCookie(res, newTokenResponse.refreshToken, ttlSeconds);
-    return this.buildUserResponse(user, newTokenResponse.accessToken);
+    return {
+      username: user.username,
+      email: user.email,
+      bio: user.bio,
+      image: presignedAvatarUrl || null,
+      accessToken: newTokenResponse.accessToken,
+    };
   }
 
   /**
@@ -171,20 +235,65 @@ export class UserService {
     const { ttlMilliseconds, ttlSeconds } = this.calculateTtlUsingExpiryEpochSeconds(decodedNewRefreshToken.exp);
     await this.cacheManager.set(decodedNewRefreshToken.sid, encryptedNewRefreshToken, ttlMilliseconds);
     const user = await this.dataSource.manager.findOneBy(User, { userId: decodedNewRefreshToken.sub });
+    let presignedAvatarUrl: string;
+    if (user.avatarPath) {
+      presignedAvatarUrl = await this.minioClientService.getPresignedDownloadUrl(user.avatarPath);
+    }
     this.setRefreshTokenInHttpOnlyCookie(res, newTokenResponse.refreshToken, ttlSeconds);
-    return this.buildUserResponse(user, newTokenResponse.accessToken);
+    return {
+      username: user.username,
+      email: user.email,
+      bio: user.bio,
+      image: presignedAvatarUrl || null,
+      accessToken: newTokenResponse.accessToken,
+    };
   }
 
   /**
-   * @description Update information in Keycloak and entity
+   * @description Check if avatar image file is valid in type and size. If not, error is thrown.
    */
-  private async updateKeycloakUserAndEntity(userId: string, updateUserInfoInput: UpdateUserInfoInput): Promise<void> {
-    const updateKeycloakUserInput = omitBy(pick(updateUserInfoInput, ['username']), isNil);
-    await this.keycloakApiClientService.updateUserInfo(userId, updateKeycloakUserInput);
-    const updateUserEntityInput = omitBy(pick(updateUserInfoInput, ['username', 'bio']), isNil);
-    if (!isEmpty(updateUserEntityInput)) {
-      await this.dataSource.manager.update(User, { userId }, updateUserEntityInput);
+  private validateAvatarImageOrFail(avatar: Express.Multer.File): void {
+    this.validateAvatarImageFileSize(avatar, this.maxFileSizeInKbForAvatar);
+    this.validateAvatarImageFileType(avatar, this.allowedMimeTypesForAvatar);
+  }
+
+  private validateAvatarImageFileSize(avatar: Express.Multer.File, maxFileSizeInKbForAvatar: number): boolean {
+    const avatarFileSizeInByte = avatar.size;
+    const maxFileSizeInByteForAvatar = maxFileSizeInKbForAvatar * 1000;
+    if (avatarFileSizeInByte > maxFileSizeInByteForAvatar) {
+      throw new UserAvatarFileSizeTooBigError(this.maxFileSizeInKbForAvatar);
     }
+    return true;
+  }
+
+  private validateAvatarImageFileType(avatar: Express.Multer.File, allowedMimeTypesForAvatar: string): boolean {
+    const mimeTypeList = allowedMimeTypesForAvatar.split(',');
+    if (!mimeTypeList.includes(avatar.mimetype)) {
+      throw new UserAvatarFileTypeNotAllowedError(mimeTypeList.join(', '));
+    }
+    return true;
+  }
+
+  /**
+   * @description Update user entity in database with the new input.
+   * @returns Updated user entity.
+   */
+  private async updateUser(userId: string, updateUserInfoInput: UpdateUserInfoInput, avatarPath: string): Promise<User> {
+    const updateUserEntityInput = omitBy(
+      omitBy(pick({ ...updateUserInfoInput, avatarPath }, ['username', 'bio', 'avatarPath']), isNil),
+      isEmpty
+    );
+    await this.dataSource.manager.update(User, { userId }, updateUserEntityInput);
+    const updatedUser = await this.dataSource.manager.findOneBy(User, { userId });
+    return updatedUser;
+  }
+
+  /**
+   * @description Update user information in Keycloak with the new input.
+   */
+  private async updateKeycloakUser(userId: string, updateUserInfoInput: UpdateUserInfoInput): Promise<void> {
+    const updateKeycloakUserInput = omitBy(omitBy(pick(updateUserInfoInput, ['username']), isNil), isEmpty);
+    await this.keycloakApiClientService.updateUserInfo(userId, { ...updateKeycloakUserInput });
   }
 
   /**
@@ -221,14 +330,5 @@ export class UserService {
       path: RefreshTokenHttpOnlyCookieOption.Path,
       secure: !isNil(process.env.NODE_ENV) && process.env.NODE_ENV === 'production',
     });
-  }
-
-  /**
-   * @description Build user response using user entity and encoded access token.
-   * @returns User response.
-   */
-  private buildUserResponse(user: User, accessToken?: string): UserResponse {
-    const { username, email, bio } = user;
-    return { username, email, bio, image: null, accessToken: accessToken || null };
   }
 }

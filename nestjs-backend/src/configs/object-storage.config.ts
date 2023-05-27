@@ -9,9 +9,7 @@ function validateRequiredEnvVarsOrFail() {
     isNil(process.env.MINIO_ROOT_USER) ||
     isEmpty(process.env.MINIO_ROOT_USER) ||
     isNil(process.env.MINIO_ROOT_PASSWORD) ||
-    isEmpty(process.env.MINIO_ROOT_PASSWORD) ||
-    isNil(process.env.MINIO_BUCKET) ||
-    isEmpty(process.env.MINIO_BUCKET)
+    isEmpty(process.env.MINIO_ROOT_PASSWORD)
   ) {
     throw new ConfigRequiredEnvVarsMissingError();
   }
@@ -25,6 +23,5 @@ export default registerAs('objectStorage', () => {
     useSSL: isNil(process.env.MINIO_USER_SSL) || isEmpty(process.env.MINIO_USER_SSL) ? false : process.env.MINIO_USER_SSL === 'true',
     accessKey: process.env.MINIO_ROOT_USER, // required
     secretKey: process.env.MINIO_ROOT_PASSWORD, // required
-    bucket: process.env.MINIO_BUCKET, // required
   };
 });

@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon';
 import { UserService } from './user.service';
+import { UserAvatarFileSizeTooBigError, UserAvatarFileTypeNotAllowedError } from './user.error';
 
 describe('UserService', () => {
   let userService: any;
@@ -8,7 +9,55 @@ describe('UserService', () => {
   const DECODED_TOKEN = { sub: '1234567890', name: 'John Doe', iat: 1516239022 };
 
   beforeEach(() => {
-    userService = new UserService({} as any, {} as any, {} as any, {} as any);
+    userService = new UserService({ get: jest.fn() } as any, {} as any, {} as any, {} as any, {} as any, {} as any);
+  });
+
+  describe('validateAvatarImageFileSize', () => {
+    it('should return true if avatar file size is valid', () => {
+      // ARRANGE
+      const avatar = { size: 300000 };
+      // ACT
+      const result = userService.validateAvatarImageFileSize(avatar, 500);
+      // ASSERT
+      expect(result).toBe(true);
+    });
+
+    it('should fail if avatar file size is bigger than max size', () => {
+      // ARRANGE
+      const avatar = { size: 6000000 };
+      try {
+        // ACT
+        userService.validateAvatarImageFileSize(avatar, 500);
+      } catch (error) {
+        // ASSERT
+        expect(error).toBeInstanceOf(UserAvatarFileSizeTooBigError);
+      }
+    });
+  });
+
+  describe('validateAvatarImageFileType', () => {
+    it('should return true if avatar file type is valid', () => {
+      // ARRANGE
+      const avatar = { mimetype: 'image/png' };
+      const allowedMimeTypesForAvatar = 'image/jpeg,image/png,image/gif';
+      // ACT
+      const result = userService.validateAvatarImageFileType(avatar, allowedMimeTypesForAvatar);
+      // ASSERT
+      expect(result).toBe(true);
+    });
+
+    it('should fail if avatar is bigger than max size', () => {
+      // ARRANGE
+      const avatar = { mimetype: 'image/png' };
+      const allowedMimeTypesForAvatar = 'image/jpeg,image/gif';
+      try {
+        // ACT
+        userService.validateAvatarImageFileType(avatar, allowedMimeTypesForAvatar);
+      } catch (error) {
+        // ASSERT
+        expect(error).toBeInstanceOf(UserAvatarFileTypeNotAllowedError);
+      }
+    });
   });
 
   describe('decodeToken', () => {
@@ -50,17 +99,6 @@ describe('UserService', () => {
         path,
         secure: false,
       });
-    });
-  });
-
-  describe('buildUserResponse', () => {
-    it('should build user response using user entity and access token', () => {
-      // ARRANGE
-      const user = { username: 'test-user', email: 'test-user@email.com', bio: 'I am a test user.' };
-      // ACT
-      const userResponse = userService.buildUserResponse(user, ENCODED_TOKEN);
-      // ASSERT
-      expect(userResponse).toEqual({ username: user.username, email: user.email, bio: user.bio, image: null, accessToken: ENCODED_TOKEN });
     });
   });
 });

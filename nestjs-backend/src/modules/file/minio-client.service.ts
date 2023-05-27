@@ -1,12 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Client } from 'minio';
-import { FileCreateBucketFailedError } from './file.error';
+import { Client, ItemBucketMetadata } from 'minio';
+import { FileCreateBucketFailedError, FileGetAvatarPresignedUrlFailedError, FileUploadFileFailedError } from './file.error';
 
 @Injectable()
 export class MinioClientService {
   private readonly logger = new Logger(MinioClientService.name);
-  private readonly bucketName = this.config.get<string>('objectStorage.bucket');
+  private readonly bucketName = this.config.get<string>('backend.fileBucket');
+  private readonly avatarDownloadUrlTtl = this.config.get<number>('backend.fileAvatarDownloadUrlTtl');
 
   constructor(private config: ConfigService, private minioClient: Client) {}
 
@@ -15,6 +16,24 @@ export class MinioClientService {
    */
   async onApplicationBootstrap(): Promise<void> {
     await this.createBucketIfNotExists();
+  }
+
+  async uploadFile(objectName: string, buffer: Buffer, size: number, metadata?: ItemBucketMetadata) {
+    try {
+      await this.minioClient.putObject(this.bucketName, objectName, buffer, size, metadata);
+    } catch (error) {
+      this.logger.error(error);
+      throw new FileUploadFileFailedError();
+    }
+  }
+
+  async getPresignedDownloadUrl(objectName: string): Promise<string> {
+    try {
+      return await this.minioClient.presignedGetObject(this.bucketName, objectName, this.avatarDownloadUrlTtl);
+    } catch (error) {
+      this.logger.error(error);
+      throw new FileGetAvatarPresignedUrlFailedError();
+    }
   }
 
   /**
