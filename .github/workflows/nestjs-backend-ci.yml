@@ -21,9 +21,14 @@ jobs:
           node-version: 18.x
           cache: 'npm'
           cache-dependency-path: ./nestjs-backend
+      - name: Run docker compose
+        run: |
+          cp .env.local .env
+          docker-compose -f "docker-compose.yml" up -d
       - name: Run tests
         working-directory: ./nestjs-backend
         run: |
           npm ci
           npm run lint
           npm run test
+          npm run test:e2e
