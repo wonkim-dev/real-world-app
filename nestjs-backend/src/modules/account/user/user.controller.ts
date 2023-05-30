@@ -16,14 +16,7 @@ import { AuthenticatedUser, Public } from 'nest-keycloak-connect';
 import { DecodedAccessToken } from 'src/models/model';
 import { UserService } from './user.service';
 import { AccessToken, RefreshToken } from './user.decorator';
-import {
-  ChangeUserPasswordInput,
-  CreateUserInput,
-  LoginUserInput,
-  RefreshTokenInput,
-  UpdateUserInfoInput,
-  UserResponse,
-} from './user.model';
+import { ChangeUserPasswordDto, CreateUserDto, LoginUserDto, RefreshTokenInput, UpdateUserInfoInput, UserResponse } from './user.model';
 
 @Controller('api/users')
 @ApiBearerAuth()
@@ -40,8 +33,9 @@ export class UserController {
   @ApiResponse({ type: UserResponse, status: 201 })
   @ApiBadRequestResponse({ description: 'Invalid input' })
   @ApiConflictResponse({ description: 'Username or email already exists' })
-  async createUser(@Body() createUserInput: CreateUserInput, @Res({ passthrough: true }) res: Response): Promise<UserResponse> {
-    return await this.userService.createUser(res, createUserInput);
+  async createUser(@Body() createUserDto: CreateUserDto, @Res({ passthrough: true }) res: Response): Promise<UserResponse> {
+    const user = await this.userService.createUser(res, createUserDto.user);
+    return { user };
   }
 
   @Post('login')
@@ -54,8 +48,9 @@ export class UserController {
   @ApiResponse({ type: UserResponse, status: 200 })
   @ApiBadRequestResponse({ description: 'Invalid input' })
   @ApiUnauthorizedResponse({ description: 'Authentication failed' })
-  async loginUser(@Body() loginUserInput: LoginUserInput, @Res({ passthrough: true }) res: Response): Promise<UserResponse> {
-    return await this.userService.loginUser(res, loginUserInput);
+  async loginUser(@Body() loginUserDto: LoginUserDto, @Res({ passthrough: true }) res: Response): Promise<UserResponse> {
+    const user = await this.userService.loginUser(res, loginUserDto.user);
+    return { user };
   }
 
   @Get()
@@ -70,7 +65,7 @@ export class UserController {
     @AccessToken() accessToken: string
   ): Promise<UserResponse> {
     const userResponse = await this.userService.getCurrentUser(decodedAccessToken);
-    return { ...userResponse, accessToken };
+    return { user: { ...userResponse, accessToken } };
   }
 
   @Patch('password')
@@ -84,9 +79,10 @@ export class UserController {
   async changeUserPassword(
     @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
     @Res({ passthrough: true }) res: Response,
-    @Body() changeUserPasswordInput: ChangeUserPasswordInput
+    @Body() changeUserPasswordDto: ChangeUserPasswordDto
   ): Promise<UserResponse> {
-    return await this.userService.changeUserPassword(res, decodedAccessToken, changeUserPasswordInput);
+    const user = await this.userService.changeUserPassword(res, decodedAccessToken, changeUserPasswordDto.user);
+    return { user };
   }
 
   @Patch()
@@ -113,11 +109,12 @@ export class UserController {
   async updateUserInfo(
     @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
     @Res({ passthrough: true }) res: Response,
-    @Body() updateUserInfoInput: UpdateUserInfoInput,
+    @Body() updateUserInfoDto: UpdateUserInfoInput,
     @UploadedFile('file')
     avatar?: Express.Multer.File
   ): Promise<UserResponse> {
-    return await this.userService.updateUserInfo(res, decodedAccessToken, updateUserInfoInput, avatar);
+    const user = await this.userService.updateUserInfo(res, decodedAccessToken, updateUserInfoDto, avatar);
+    return { user };
   }
 
   @Post('refresh')
@@ -131,6 +128,7 @@ export class UserController {
     @RefreshToken() refreshToken: string,
     @Body() refreshTokenInput: RefreshTokenInput
   ): Promise<UserResponse> {
-    return await this.userService.refreshAccessToken(res, refreshToken, refreshTokenInput);
+    const user = await this.userService.refreshAccessToken(res, refreshToken, refreshTokenInput);
+    return { user };
   }
 }

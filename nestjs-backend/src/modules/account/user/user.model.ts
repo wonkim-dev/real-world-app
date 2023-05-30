@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, ValidateNested } from 'class-validator';
 
 export class CreateUserInput {
   @IsEmail()
@@ -18,6 +19,13 @@ export class CreateUserInput {
   password: string;
 }
 
+export class CreateUserDto {
+  @ApiProperty()
+  @ValidateNested()
+  @Type(() => CreateUserInput)
+  user: CreateUserInput;
+}
+
 export class LoginUserInput {
   @IsEmail()
   @IsNotEmpty()
@@ -30,6 +38,13 @@ export class LoginUserInput {
   password: string;
 }
 
+export class LoginUserDto {
+  @ApiProperty()
+  @ValidateNested()
+  @Type(() => LoginUserInput)
+  user: LoginUserInput;
+}
+
 export class ChangeUserPasswordInput {
   @IsString()
   @IsNotEmpty()
@@ -40,6 +55,13 @@ export class ChangeUserPasswordInput {
   @IsNotEmpty()
   @ApiProperty()
   newPassword: string;
+}
+
+export class ChangeUserPasswordDto {
+  @ApiProperty()
+  @ValidateNested()
+  @Type(() => ChangeUserPasswordInput)
+  user: ChangeUserPasswordInput;
 }
 
 export class UpdateUserInfoInput {
@@ -60,7 +82,7 @@ export class RefreshTokenInput {
   sessionId: string;
 }
 
-export class UserResponse {
+export class UserData {
   @ApiProperty({ example: 'jake' })
   username: string;
   @ApiProperty({ example: 'jake@email.com' })
@@ -71,4 +93,9 @@ export class UserResponse {
   image: string;
   @ApiProperty({ example: 'jwt.token.here' })
   accessToken: string;
+}
+
+export class UserResponse {
+  @ApiProperty()
+  user: UserData;
 }

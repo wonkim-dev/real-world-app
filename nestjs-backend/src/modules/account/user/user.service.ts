@@ -21,14 +21,7 @@ import {
   UserAvatarFileTypeNotAllowedError,
   UserAvatarFileSizeTooBigError,
 } from './user.error';
-import {
-  ChangeUserPasswordInput,
-  CreateUserInput,
-  LoginUserInput,
-  RefreshTokenInput,
-  UpdateUserInfoInput,
-  UserResponse,
-} from './user.model';
+import { ChangeUserPasswordInput, CreateUserInput, LoginUserInput, RefreshTokenInput, UpdateUserInfoInput, UserData } from './user.model';
 
 enum RefreshTokenHttpOnlyCookieOption {
   CookieName = 'refresh-token',
@@ -55,7 +48,7 @@ export class UserService {
    * A new user session is created after successful user registration.
    * @returns Created user with access token.
    */
-  async createUser(res: Response, createUserInput: CreateUserInput): Promise<UserResponse> {
+  async createUser(res: Response, createUserInput: CreateUserInput): Promise<UserData> {
     await this.keycloakApiClientService.createKeycloakUser(createUserInput);
     const { username, email, password } = createUserInput;
     const { accessToken, refreshToken, sessionState } = await this.keycloakApiClientService.getUserTokenUsingPassword(username, password);
@@ -79,7 +72,7 @@ export class UserService {
    * A new user session is created after successful login.
    * @returns User with access token.
    */
-  async loginUser(res: Response, loginUserInput: LoginUserInput): Promise<UserResponse> {
+  async loginUser(res: Response, loginUserInput: LoginUserInput): Promise<UserData> {
     const { accessToken, refreshToken, sessionState } = await this.keycloakApiClientService.getUserTokenUsingPassword(
       loginUserInput.email,
       loginUserInput.password
@@ -107,7 +100,7 @@ export class UserService {
    * @description Get a currently authenticated user.
    * @returns Current user with access token.
    */
-  async getCurrentUser(decodedAccessToken: DecodedAccessToken): Promise<UserResponse> {
+  async getCurrentUser(decodedAccessToken: DecodedAccessToken): Promise<UserData> {
     const user = await this.dataSource.manager.findOneBy(User, { userId: decodedAccessToken.sub });
     let presignedAvatarUrl: string;
     if (user.avatarPath) {
@@ -131,7 +124,7 @@ export class UserService {
     res: Response,
     decodedAccessToken: DecodedAccessToken,
     changeUserPasswordInput: ChangeUserPasswordInput
-  ): Promise<UserResponse> {
+  ): Promise<UserData> {
     const passwordIsValid = await this.keycloakApiClientService.isPasswordValid(
       decodedAccessToken.email,
       changeUserPasswordInput.oldPassword
@@ -179,7 +172,7 @@ export class UserService {
     decodedAccessToken: DecodedAccessToken,
     updateUserInfoInput: UpdateUserInfoInput,
     avatar: Express.Multer.File
-  ): Promise<UserResponse> {
+  ): Promise<UserData> {
     const encryptedData = await this.cacheManager.get<EncryptedData>(decodedAccessToken.sid);
     if (!encryptedData) {
       throw new UserRefreshTokenExpiredError();
@@ -189,7 +182,7 @@ export class UserService {
       this.validateAvatarImageOrFail(avatar);
       const extension = mime.extension(avatar.mimetype);
       avatarPath = `users/${decodedAccessToken.sub}/avatar.${extension}`;
-      await this.minioClientService.uploadFile(avatarPath, avatar.buffer, avatar.size);
+      await this.minioClientService.uploadFile(avatarPath, avatar.buffer, avatar.size); // TODO: Store presigned url in cache
     }
     await this.updateKeycloakUser(decodedAccessToken.sub, updateUserInfoInput);
     const user = await this.updateUser(decodedAccessToken.sub, updateUserInfoInput, avatarPath);
@@ -217,7 +210,7 @@ export class UserService {
    * @description Create a new access token using refresh token passed via http only cookies.
    * @returns User with access token
    */
-  async refreshAccessToken(res: Response, refreshToken: string, refreshTokenInput: RefreshTokenInput): Promise<UserResponse> {
+  async refreshAccessToken(res: Response, refreshToken: string, refreshTokenInput: RefreshTokenInput): Promise<UserData> {
     if (!refreshToken) {
       throw new UserMissingRefreshTokenError();
     }

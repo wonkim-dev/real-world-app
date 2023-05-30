@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import * as request from 'supertest';
 import * as cookieParser from 'cookie-parser';
+import { cloneDeep } from 'lodash';
 import databaseConfig from '../../../src/configs/database.config';
 import iamConfig from '../../../src/configs/iam.config';
 import cacheConfig from '../../../src/configs/cache-store.config';
@@ -36,8 +37,8 @@ enum NestKeycloakConnectErrorMessage {
 }
 
 enum ClassValidatorErrorMessage {
-  InvalidEmail = 'email must be an email',
-  EmptyPassword = 'password should not be empty',
+  InvalidEmail = 'user.email must be an email',
+  EmptyPassword = 'user.password should not be empty',
 }
 
 describe('User', () => {
@@ -77,7 +78,7 @@ describe('User', () => {
   });
 
   describe('POST /api/users', () => {
-    const USER_INPUT = { email: 'e2e-test@email.com', password: 'e2e-test-password', username: 'e2e-test-username' };
+    const USER_INPUT = { user: { email: 'e2e-test@email.com', password: 'e2e-test-password', username: 'e2e-test-username' } };
     let userId: string;
 
     describe('Positive tests', () => {
@@ -92,28 +93,30 @@ describe('User', () => {
         const res = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT);
         // ASSERT
         const decodedAccessToken: DecodedAccessToken = JSON.parse(
-          Buffer.from(res.body.accessToken.split('.')[1], 'base64').toString('utf8')
+          Buffer.from(res.body.user.accessToken.split('.')[1], 'base64').toString('utf8')
         );
         expect(res.status).toBe(201);
-        expect(res.body).toEqual(expect.objectContaining({ email: USER_INPUT.email, username: USER_INPUT.username }));
-        expect(decodedAccessToken.email).toBe(USER_INPUT.email);
-        expect(decodedAccessToken.preferred_username).toBe(USER_INPUT.username);
+        expect(res.body.user).toEqual(expect.objectContaining({ email: USER_INPUT.user.email, username: USER_INPUT.user.username }));
+        expect(decodedAccessToken.email).toBe(USER_INPUT.user.email);
+        expect(decodedAccessToken.preferred_username).toBe(USER_INPUT.user.username);
         userId = decodedAccessToken.sub;
       });
     });
 
     describe('Negative tests', () => {
       const inputForNegativeTest = {
-        email: 'e2e-test-negative@email.com',
-        password: 'e2e-test-negative-password',
-        username: 'e2e-test-negative-username',
+        user: {
+          email: 'e2e-test-negative@email.com',
+          password: 'e2e-test-negative-password',
+          username: 'e2e-test-negative-username',
+        },
       };
 
       beforeAll(async () => {
         // Create a mock user
         const res = await request(app.getHttpServer()).post('/api/users').send(USER_INPUT);
         const decodedAccessToken: DecodedAccessToken = JSON.parse(
-          Buffer.from(res.body.accessToken.split('.')[1], 'base64').toString('utf8')
+          Buffer.from(res.body.user.accessToken.split('.')[1], 'base64').toString('utf8')
         );
         userId = decodedAccessToken.sub;
       });
@@ -126,7 +129,8 @@ describe('User', () => {
 
       it('should fail if username already exist', async () => {
         // ARRANGE
-        const body = { ...inputForNegativeTest, username: USER_INPUT.username };
+        const body = cloneDeep(inputForNegativeTest);
+        body.user.username = USER_INPUT.user.username;
         // ACT
         const res = await request(app.getHttpServer()).post(endpointApiUsers).send(body);
         // ASSERT
@@ -136,7 +140,8 @@ describe('User', () => {
 
       it('should fail if email already exist', async () => {
         // ARRANGE
-        const body = { ...inputForNegativeTest, email: USER_INPUT.email };
+        const body = cloneDeep(inputForNegativeTest);
+        body.user.email = USER_INPUT.user.email;
         // ACT
         const res = await request(app.getHttpServer()).post(endpointApiUsers).send(body);
         // ASSERT
@@ -146,7 +151,8 @@ describe('User', () => {
 
       it('should fail if email is invalid', async () => {
         // ARRANGE
-        const body = { ...inputForNegativeTest, email: 'invalidEmail' };
+        const body = cloneDeep(inputForNegativeTest);
+        body.user.email = 'invalidEmail';
         // ACT
         const res = await request(app.getHttpServer()).post(endpointApiUsers).send(body);
         // ASSERT
@@ -156,7 +162,7 @@ describe('User', () => {
 
       it('should fail if required field (password) is missing', async () => {
         // ARRANGE
-        const body = { username: inputForNegativeTest.username, email: inputForNegativeTest.email };
+        const body = { user: { username: inputForNegativeTest.user.username, email: inputForNegativeTest.user.email } };
         // ACT
         const res = await request(app.getHttpServer()).post(endpointApiUsers).send(body);
         // ASSERT
@@ -166,7 +172,7 @@ describe('User', () => {
 
       it('should fail if required field (password) is null', async () => {
         // ARRANGE
-        const body = { username: inputForNegativeTest.username, email: inputForNegativeTest.email, password: null };
+        const body = { user: { username: inputForNegativeTest.user.username, email: inputForNegativeTest.user.email, password: null } };
         // ACT
         const res = await request(app.getHttpServer()).post(endpointApiUsers).send(body);
         // ASSERT
@@ -177,15 +183,17 @@ describe('User', () => {
   });
 
   describe('GET /api/users', () => {
-    const USER_INPUT = { email: 'e2e-test@email.com', password: 'e2e-test-password', username: 'e2e-test-username' };
+    const USER_INPUT = { user: { email: 'e2e-test@email.com', password: 'e2e-test-password', username: 'e2e-test-username' } };
     let accessToken: string;
     let userId: string;
 
     beforeAll(async () => {
       // Create a mock user
       const res = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT);
-      accessToken = res.body.accessToken;
-      const decodedAccessToken: DecodedAccessToken = JSON.parse(Buffer.from(res.body.accessToken.split('.')[1], 'base64').toString('utf8'));
+      accessToken = res.body.user.accessToken;
+      const decodedAccessToken: DecodedAccessToken = JSON.parse(
+        Buffer.from(res.body.user.accessToken.split('.')[1], 'base64').toString('utf8')
+      );
       userId = decodedAccessToken.sub;
     });
 
@@ -201,8 +209,8 @@ describe('User', () => {
         const res = await request(app.getHttpServer()).get(endpointApiUsers).set('Authorization', `Bearer ${accessToken}`);
         // ASSERT
         expect(res.status).toBe(200);
-        expect(res.body.email).toBe(USER_INPUT.email);
-        expect(res.body.accessToken).toBe(accessToken);
+        expect(res.body.user.email).toBe(USER_INPUT.user.email);
+        expect(res.body.user.accessToken).toBe(accessToken);
       });
     });
 
@@ -226,8 +234,8 @@ describe('User', () => {
   });
 
   describe('PATCH /api/users', () => {
-    const USER_INPUT_1 = { email: 'e2e-test-1@email.com', password: 'e2e-test-password-1', username: 'e2e-test-username-1' };
-    const USER_INPUT_2 = { email: 'e2e-test-2@email.com', password: 'e2e-test-password-2', username: 'e2e-test-username-2' };
+    const USER_INPUT_1 = { user: { email: 'e2e-test-1@email.com', password: 'e2e-test-password-1', username: 'e2e-test-username-1' } };
+    const USER_INPUT_2 = { user: { email: 'e2e-test-2@email.com', password: 'e2e-test-password-2', username: 'e2e-test-username-2' } };
     let accessToken1: string;
     let userId1: string;
     let userId2: string;
@@ -236,9 +244,9 @@ describe('User', () => {
       beforeEach(async () => {
         // Create a mock user
         const res = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT_1);
-        accessToken1 = res.body.accessToken;
+        accessToken1 = res.body.user.accessToken;
         const decodedAccessToken1: DecodedAccessToken = JSON.parse(
-          Buffer.from(res.body.accessToken.split('.')[1], 'base64').toString('utf8')
+          Buffer.from(res.body.user.accessToken.split('.')[1], 'base64').toString('utf8')
         );
         userId1 = decodedAccessToken1.sub;
       });
@@ -256,27 +264,29 @@ describe('User', () => {
         const res = await request(app.getHttpServer()).patch(endpointApiUsers).set('Authorization', `Bearer ${accessToken1}`).send(body);
         // ASSERT
         expect(res.status).toBe(200);
-        expect(res.body).toEqual(expect.objectContaining(body));
+        expect(res.body.user).toEqual(expect.objectContaining(body));
         const decodedAccessToken: DecodedAccessToken = JSON.parse(
-          Buffer.from(res.body.accessToken.split('.')[1], 'base64').toString('utf8')
+          Buffer.from(res.body.user.accessToken.split('.')[1], 'base64').toString('utf8')
         );
         expect(decodedAccessToken.preferred_username).toBe(body.username);
       });
+
+      // TODO: Write another positive test to upload a avatar
     });
 
     describe('Negative tests', () => {
       beforeAll(async () => {
         // Create mock user 1
         const res1 = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT_1);
-        accessToken1 = res1.body.accessToken;
+        accessToken1 = res1.body.user.accessToken;
         const decodedAccessToken1: DecodedAccessToken = JSON.parse(
-          Buffer.from(res1.body.accessToken.split('.')[1], 'base64').toString('utf8')
+          Buffer.from(res1.body.user.accessToken.split('.')[1], 'base64').toString('utf8')
         );
         userId1 = decodedAccessToken1.sub;
         // Create mock user 2
         const res2 = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT_2);
         const decodedAccessToken2: DecodedAccessToken = JSON.parse(
-          Buffer.from(res2.body.accessToken.split('.')[1], 'base64').toString('utf8')
+          Buffer.from(res2.body.user.accessToken.split('.')[1], 'base64').toString('utf8')
         );
         userId2 = decodedAccessToken2.sub;
       });
@@ -291,7 +301,7 @@ describe('User', () => {
 
       it('should fail if username already exists', async () => {
         // ARRANGE
-        const body = { username: USER_INPUT_2.username, bio: 'new-e2e-test-bio' };
+        const body = { username: USER_INPUT_2.user.username, bio: 'new-e2e-test-bio' };
         // ACT: Update username of user 1 to the same username of user 2
         const res = await request(app.getHttpServer()).patch(endpointApiUsers).set('Authorization', `Bearer ${accessToken1}`).send(body);
         // ASSERT
@@ -300,7 +310,7 @@ describe('User', () => {
 
       it('should fail if access token is invalid', async () => {
         // ARRANGE
-        const body = { username: USER_INPUT_2.username, bio: 'new-e2e-test-bio' };
+        const body = { username: USER_INPUT_2.user.username, bio: 'new-e2e-test-bio' };
         // ACT
         const res = await request(app.getHttpServer()).patch(endpointApiUsers).set('Authorization', `Bearer invalidToken`).send(body);
         // ASSERT
@@ -310,7 +320,7 @@ describe('User', () => {
 
       it('should fail if access token is missing', async () => {
         // ARRANGE
-        const body = { username: USER_INPUT_2.username, bio: 'new-e2e-test-bio' };
+        const body = { username: USER_INPUT_2.user.username, bio: 'new-e2e-test-bio' };
         // ACT
         const res = await request(app.getHttpServer()).patch(endpointApiUsers).send(body);
         // ASSERT
@@ -321,7 +331,7 @@ describe('User', () => {
   });
 
   describe('POST /api/users/login', () => {
-    const USER_INPUT = { email: 'e2e-test@email.com', password: 'e2e-test-password', username: 'e2e-test-username' };
+    const USER_INPUT = { user: { email: 'e2e-test@email.com', password: 'e2e-test-password', username: 'e2e-test-username' } };
     let userId: string;
     let accessToken: string;
 
@@ -329,7 +339,7 @@ describe('User', () => {
       // Create a mock user
       beforeAll(async () => {
         const res = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT);
-        accessToken = res.body.accessToken;
+        accessToken = res.body.user.accessToken;
         const decodedAccessToken: DecodedAccessToken = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString('utf8'));
         userId = decodedAccessToken.sub;
       });
@@ -342,12 +352,12 @@ describe('User', () => {
 
       it('should login a user', async () => {
         // ARRANGE
-        const body = { email: USER_INPUT.email, password: USER_INPUT.password };
+        const body = { user: { email: USER_INPUT.user.email, password: USER_INPUT.user.password } };
         // ACT
         const res = await request(app.getHttpServer()).post(endpointApiUsersLogin).send(body);
         // ASSERT
         expect(res.status).toBe(200);
-        expect(res.body).toEqual(expect.objectContaining({ email: USER_INPUT.email, username: USER_INPUT.username }));
+        expect(res.body.user).toEqual(expect.objectContaining({ email: USER_INPUT.user.email, username: USER_INPUT.user.username }));
       });
     });
 
@@ -355,7 +365,7 @@ describe('User', () => {
       // Create a mock user
       beforeAll(async () => {
         const res = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT);
-        accessToken = res.body.accessToken;
+        accessToken = res.body.user.accessToken;
         const decodedAccessToken: DecodedAccessToken = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString('utf8'));
         userId = decodedAccessToken.sub;
       });
@@ -368,7 +378,7 @@ describe('User', () => {
 
       it('should fail with wrong password', async () => {
         // ARRANGE
-        const body = { email: USER_INPUT.email, password: 'wrongPassword' };
+        const body = { user: { email: USER_INPUT.user.email, password: 'wrongPassword' } };
         // ACT
         const res = await request(app.getHttpServer()).post(endpointApiUsersLogin).send(body);
         // ASSERT
@@ -378,7 +388,7 @@ describe('User', () => {
 
       it('should fail with missing password', async () => {
         // ARRANGE
-        const body = { email: USER_INPUT.email };
+        const body = { user: { email: USER_INPUT.user.email } };
         // ACT
         const res = await request(app.getHttpServer()).post(endpointApiUsersLogin).send(body);
         // ASSERT
@@ -389,7 +399,7 @@ describe('User', () => {
   });
 
   describe('PATCH /api/users/password', () => {
-    const USER_INPUT = { email: 'e2e-test@email.com', password: 'e2e-test-password', username: 'e2e-test-username' };
+    const USER_INPUT = { user: { email: 'e2e-test@email.com', password: 'e2e-test-password', username: 'e2e-test-username' } };
     let userId: string;
     let accessToken: string;
 
@@ -397,7 +407,7 @@ describe('User', () => {
       // Create a mock user
       beforeEach(async () => {
         const res = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT);
-        accessToken = res.body.accessToken;
+        accessToken = res.body.user.accessToken;
         const decodedAccessToken: DecodedAccessToken = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString('utf8'));
         userId = decodedAccessToken.sub;
       });
@@ -410,7 +420,7 @@ describe('User', () => {
 
       it('should change password', async () => {
         // ARRANGE
-        const body = { oldPassword: USER_INPUT.password, newPassword: 'newPassword' };
+        const body = { user: { oldPassword: USER_INPUT.user.password, newPassword: 'newPassword' } };
         // ACT
         const res = await request(app.getHttpServer())
           .patch(endpointApiUsersPassword)
@@ -418,7 +428,7 @@ describe('User', () => {
           .send(body);
         // ASSERT
         expect(res.status).toBe(200);
-        expect(res.body).toEqual(expect.objectContaining({ email: USER_INPUT.email, username: USER_INPUT.username }));
+        expect(res.body.user).toEqual(expect.objectContaining({ email: USER_INPUT.user.email, username: USER_INPUT.user.username }));
       });
     });
 
@@ -426,7 +436,7 @@ describe('User', () => {
       // Create a mock user
       beforeAll(async () => {
         const res = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT);
-        accessToken = res.body.accessToken;
+        accessToken = res.body.user.accessToken;
         const decodedAccessToken: DecodedAccessToken = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString('utf8'));
         userId = decodedAccessToken.sub;
       });
@@ -439,7 +449,7 @@ describe('User', () => {
 
       it('should fail with wrong old password', async () => {
         // ARRANGE
-        const body = { oldPassword: 'wrongPassword', newPassword: 'newPassword' };
+        const body = { user: { oldPassword: 'wrongPassword', newPassword: 'newPassword' } };
         // ACT
         const res = await request(app.getHttpServer())
           .patch(endpointApiUsersPassword)
@@ -452,7 +462,7 @@ describe('User', () => {
 
       it('should fail with missing old password', async () => {
         // ARRANGE
-        const body = { newPassword: 'newPassword' };
+        const body = { user: { newPassword: 'newPassword' } };
         // ACT
         const res = await request(app.getHttpServer())
           .patch(endpointApiUsersPassword)
@@ -464,7 +474,7 @@ describe('User', () => {
 
       it('should fail with missing new password', async () => {
         // ARRANGE
-        const body = { oldPassword: 'oldPassword' };
+        const body = { user: { oldPassword: 'oldPassword' } };
         // ACT
         const res = await request(app.getHttpServer())
           .patch(endpointApiUsersPassword)
@@ -477,14 +487,14 @@ describe('User', () => {
   });
 
   describe('POST /api/users/refresh', () => {
-    const USER_INPUT = { email: 'e2e-test@email.com', password: 'e2e-test-password', username: 'e2e-test-username' };
+    const USER_INPUT = { user: { email: 'e2e-test@email.com', password: 'e2e-test-password', username: 'e2e-test-username' } };
     let userId: string;
     let accessToken: string;
 
     // Create a mock user
     beforeAll(async () => {
       const res = await request(app.getHttpServer()).post(endpointApiUsers).send(USER_INPUT);
-      accessToken = res.body.accessToken;
+      accessToken = res.body.user.accessToken;
       const decodedAccessToken: DecodedRefreshToken = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString('utf8'));
       userId = decodedAccessToken.sub;
     });
@@ -499,16 +509,18 @@ describe('User', () => {
       it('should get a new token using refresh token', async () => {
         // ARRANGE
         const agent = request.agent(app.getHttpServer());
-        const loginResult = await agent.post('/api/users/login').send({ email: USER_INPUT.email, password: USER_INPUT.password });
+        const loginResult = await agent
+          .post('/api/users/login')
+          .send({ user: { email: USER_INPUT.user.email, password: USER_INPUT.user.password } });
         const loginDecodedAccessToken: DecodedAccessToken = JSON.parse(
-          Buffer.from(loginResult.body.accessToken.split('.')[1], 'base64').toString('utf8')
+          Buffer.from(loginResult.body.user.accessToken.split('.')[1], 'base64').toString('utf8')
         );
         const body = { sessionId: loginDecodedAccessToken.sid };
         // ACT
         const res = await agent.post(endpointApiUsersRefresh).send(body);
         // ASSERT
         expect(res.status).toBe(200);
-        expect(res.body).toEqual(expect.objectContaining({ email: USER_INPUT.email, username: USER_INPUT.username }));
+        expect(res.body.user).toEqual(expect.objectContaining({ email: USER_INPUT.user.email, username: USER_INPUT.user.username }));
       });
     });
 
@@ -517,9 +529,9 @@ describe('User', () => {
         // ARRANGE
         const loginResult = await request(app.getHttpServer())
           .post('/api/users/login')
-          .send({ email: USER_INPUT.email, password: USER_INPUT.password });
+          .send({ user: { email: USER_INPUT.user.email, password: USER_INPUT.user.password } });
         const loginDecodedAccessToken: DecodedAccessToken = JSON.parse(
-          Buffer.from(loginResult.body.accessToken.split('.')[1], 'base64').toString('utf8')
+          Buffer.from(loginResult.body.user.accessToken.split('.')[1], 'base64').toString('utf8')
         );
         const body = { sessionId: loginDecodedAccessToken.sid };
         try {
@@ -535,7 +547,7 @@ describe('User', () => {
       it('should fail if session id in the body is invalid', async () => {
         // ARRANGE
         const agent = request.agent(app.getHttpServer());
-        await agent.post('/api/users/login').send({ email: USER_INPUT.email, password: USER_INPUT.password });
+        await agent.post('/api/users/login').send({ user: { email: USER_INPUT.user.email, password: USER_INPUT.user.password } });
         const body = { sessionId: 'invalidSessionId' };
         try {
           // ACT
