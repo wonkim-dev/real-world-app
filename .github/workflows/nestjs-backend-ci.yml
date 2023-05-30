@@ -23,8 +23,7 @@ jobs:
           cache-dependency-path: ./nestjs-backend
       - name: Run docker compose
         run: |
-          cp .env.e2e .env
-          docker-compose -f "docker-compose.yml" up -d
+          docker-compose -f "docker-compose.yml" --env-file .env.e2e up -d
       - name: Run tests
         working-directory: ./nestjs-backend
         run: |
