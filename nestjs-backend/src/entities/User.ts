@@ -2,7 +2,7 @@ import { Column, Entity, Index, OneToMany } from 'typeorm';
 import { Article } from './Article';
 import { ArticleUserMapping } from './ArticleUserMapping';
 import { Comment } from './Comment';
-import { UserUserMapping } from './UserUserMapping';
+import { UserRelation } from './UserRelation';
 
 @Index('user_pkey', ['userId'], { unique: true })
 @Index('user_unique_username', ['username'], { unique: true })
@@ -46,9 +46,9 @@ export class User {
   @OneToMany(() => Comment, (comment) => comment.fkUser)
   comments: Comment[];
 
-  @OneToMany(() => UserUserMapping, (userUserMapping) => userUserMapping.fkUser)
-  userUserMappings: UserUserMapping[];
+  @OneToMany(() => UserRelation, (userRelation) => userRelation.userByFkUserId)
+  userRelationsByFkUserId: UserRelation[];
 
-  @OneToMany(() => UserUserMapping, (userUserMapping) => userUserMapping.followedByFkUser)
-  userUserMappings2: UserUserMapping[];
+  @OneToMany(() => UserRelation, (userRelation) => userRelation.userByFollowedByFkUserId)
+  userRelationsByFollowedByFkUserId: UserRelation[];
 }
