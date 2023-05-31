@@ -1,8 +1,8 @@
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Article, ArticleTagMapping, ArticleUserMapping, Comment, Tag, User, UserUserMapping } from '../entities';
+import { Article, ArticleTagMapping, ArticleUserMapping, Comment, Tag, User, UserRelation } from '../entities';
 
-const entities = [Article, ArticleTagMapping, ArticleUserMapping, Comment, Tag, User, UserUserMapping];
+const entities = [Article, ArticleTagMapping, ArticleUserMapping, Comment, Tag, User, UserRelation];
 
 export default TypeOrmModule.forRootAsync({
   inject: [ConfigService],
