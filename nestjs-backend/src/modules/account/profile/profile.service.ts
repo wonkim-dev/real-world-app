@@ -30,7 +30,7 @@ export class ProfileService {
     let isFollowing: UserRelation;
     if (decodedAccessToken) {
       isFollowing = await this.dataSource.manager.findOneBy(UserRelation, {
-        fkUserId: targetUser.username,
+        fkUserId: targetUser.userId,
         followedByFkUserId: decodedAccessToken.sub,
       });
     }

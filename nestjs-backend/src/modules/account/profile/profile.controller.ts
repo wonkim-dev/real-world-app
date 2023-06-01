@@ -26,7 +26,7 @@ export class ProfileController {
     summary: 'Get a profile of a user by username. Authentication is not required.',
     description: 'If authenticated, whether the authenticated user follows the requested user is checked and returned in the response.',
   })
-  @ApiResponse({ type: ProfileResponse })
+  @ApiResponse({ type: ProfileResponse, status: 200 })
   @ApiNotFoundResponse({ description: 'Profile not found' })
   async getProfile(
     @DecodedAccessTokenOptional() decodedAccessToken: DecodedAccessToken,
@@ -38,7 +38,7 @@ export class ProfileController {
 
   @Post(':username/follow')
   @ApiOperation({ summary: 'Follow the requested profile. Authentication is required.' })
-  @ApiResponse({ type: ProfileResponse })
+  @ApiResponse({ type: ProfileResponse, status: 201 })
   @ApiConflictResponse({ description: 'Authenticated user already follows the profile.' })
   @ApiInternalServerErrorResponse({ description: 'Invalid user id' })
   async followProfile(
@@ -51,7 +51,7 @@ export class ProfileController {
 
   @Delete(':username/unfollow')
   @ApiOperation({ summary: 'Unfollow the requested profile. Authentication is required.' })
-  @ApiResponse({ type: ProfileResponse })
+  @ApiResponse({ type: ProfileResponse, status: 200 })
   async unfollowProfile(
     @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
     @Param('username') username: string
