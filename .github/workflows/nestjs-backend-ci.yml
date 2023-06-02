@@ -38,9 +38,9 @@ jobs:
 
       - name: Test report
         uses: dorny/test-reporter@v1
-        working-directory: ./nestjs-backend
         if: success()
         with:
           name: e2e-test-coverage
+          working-directory: ./nestjs-backend
           path: coverage/jest-junit.xml
           reporter: jest-junit
