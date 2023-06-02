@@ -16,15 +16,18 @@ jobs:
     steps:
       - name: Checkout the repository
         uses: actions/checkout@v3
+
       - name: Setup node.js 18.x
         uses: actions/setup-node@v3
         with:
           node-version: 18.x
           cache: 'npm'
           cache-dependency-path: ./nestjs-backend
+
       - name: Run docker compose
         run: |
           docker-compose -f "docker-compose.yml" --env-file .env.e2e up -d
+
       - name: Run tests
         working-directory: ./nestjs-backend
         run: |
@@ -32,9 +35,12 @@ jobs:
           npm run lint
           npm run test
           npm run test:e2e:ci
+
       - name: Test report
         uses: dorny/test-reporter@v1
+        working-directory: ./nestjs-backend
+        if: success()
         with:
           name: e2e-test-coverage
-          path: nestjs-backend/coverage/jest-junit.xml
+          path: coverage/jest-junit.xml
           reporter: jest-junit
