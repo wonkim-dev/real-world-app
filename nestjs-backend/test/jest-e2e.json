@@ -1,9 +1,22 @@
 {
   "moduleFileExtensions": ["js", "json", "ts"],
-  "rootDir": ".",
+  "rootDir": "..",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
-  }
+  },
+  "collectCoverage": true,
+  "coverageDirectory": "<rootDir>/coverage",
+  "coveragePathIgnorePatterns": [
+    "\\.spec\\.ts$",
+    "<rootDir>/coverage/",
+    "<rootDir>/dist/",
+    "<rootDir>/docs/",
+    "<rootDir>/node_modules/",
+    "<rootDir>/entities/",
+    "<rootDir>/test/"
+  ],
+  "collectCoverageFrom": ["**/*.ts"],
+  "reporters": ["default", "jest-junit"]
 }

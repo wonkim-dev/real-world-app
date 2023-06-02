@@ -4,7 +4,8 @@
 name: NestJS Backend CI
 
 on:
-  workflow_dispatch:
+  # workflow_dispatch:
+  push:
     branches: ['main']
   pull_request:
     branches: ['main']
@@ -30,4 +31,10 @@ jobs:
           npm ci
           npm run lint
           npm run test
-          npm run test:e2e
+          npm run test:e2e:ci
+      - name: Test report
+        uses: dorny/test-reporter@v1
+        with:
+          name: e2e-test-coverage
+          path: nestjs-backend/coverage/jest-junit.xml
+          reporter: jest-junit
