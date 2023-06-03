@@ -1,5 +1,11 @@
 version: '3.9'
 
+# Service Profiles
+#   - production: Run all services.
+#   - backend-dev: Run all services except for backend service. Used when developing backend.
+#   - ci-e2e-test: Run all service required for e2e test in GitHub workflow.
+#   example: docker compose --profile=backend-dev up
+
 volumes:
   postgres-data:
     driver: local
@@ -14,6 +20,10 @@ services:
     image: postgres:14
     ports:
       - 5432:5432
+    profiles:
+      - production
+      - backend-dev
+      - ci-e2e-test
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -25,7 +35,11 @@ services:
     container_name: redis
     image: redis:7.0-alpine
     ports:
-      - '6379:6379'
+      - 6379:6379
+    profiles:
+      - production
+      - backend-dev
+      - ci-e2e-test
     environment:
       REDIS_SAVE: ${REDIS_SAVE}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -39,6 +53,10 @@ services:
     ports:
       - 9000:9000
       - 9001:9001
+    profiles:
+      - production
+      - backend-dev
+      - ci-e2e-test
     volumes:
       - minio-data:/data
     environment:
@@ -51,6 +69,10 @@ services:
     image: quay.io/keycloak/keycloak:21.1.1
     ports:
       - 8080:8080
+    profiles:
+      - production
+      - backend-dev
+      - ci-e2e-test
     depends_on:
       - postgres
     environment:
@@ -67,3 +89,42 @@ services:
       KC_HTTP_ENABLED: ${KC_HTTP_ENABLED}
     entrypoint: /opt/keycloak/bin/kc.sh
     command: start
+
+  backend:
+    container_name: backend
+    image: won6526/real-world-app-nestjs-backend:main
+    ports:
+      - 3000:3000
+    profiles:
+      - production
+    depends_on:
+      - postgres
+      - redis
+      - minio
+      - keycloak
+    environment:
+      ENCRYPTION_ALGORITHM: ${BACKEND_ENCRYPTION_ALGORITHM}
+      ENCRYPTION_CIPHER_KEY_HEX: ${BACKEND_ENCRYPTION_CIPHER_KEY_HEX}
+      ENCRYPTION_CIPHER_IV_BYTES: ${BACKEND_ENCRYPTION_CIPHER_IV_BYTES}
+      ENCRYPTION_AUTH_TAG_LENGTH: ${BACKEND_ENCRYPTION_AUTH_TAG_LENGTH}
+      FILE_BUCKET: ${BACKEND_FILE_BUCKET}
+      FILE_ALLOWED_FILE_MIME_TYPES_FOR_AVATAR: ${BACKEND_FILE_ALLOWED_FILE_MIME_TYPES_FOR_AVATAR}
+      FILE_MAX_FILE_SIZE_IN_KB_FOR_AVATAR: ${BACKEND_FILE_MAX_FILE_SIZE_IN_KB_FOR_AVATAR}
+      FILE_AVATAR_DOWNLOAD_URL_TTL: ${BACKEND_FILE_AVATAR_DOWNLOAD_URL_TTL}
+      POSTGRES_HOST: ${BACKEND_POSTGRES_HOST}
+      POSTGRES_PORT: ${BACKEND_POSTGRES_PORT}
+      POSTGRES_USER: ${BACKEND_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${BACKEND_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${BACKEND_POSTGRES_DB}
+      REDIS_DEFAULT_TTL: ${BACKEND_REDIS_DEFAULT_TTL}
+      REDIS_URL: ${BACKEND_REDIS_URL}
+      REDIS_PASSWORD: ${BACKEND_REDIS_PASSWORD}
+      MINIO_ENDPOINT: ${BACKEND_MINIO_ENDPOINT}
+      MINIO_PORT: ${BACKEND_MINIO_PORT}
+      MINIO_USER_SSL: ${BACKEND_MINIO_USER_SSL}
+      MINIO_ROOT_USER: ${BACKEND_MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${BACKEND_MINIO_ROOT_PASSWORD}
+      KEYCLOAK_HOST: ${BACKEND_KEYCLOAK_HOST}
+      KEYCLOAK_REALM: ${BACKEND_KEYCLOAK_REALM}
+      KEYCLOAK_CLIENT: ${BACKEND_KEYCLOAK_CLIENT}
+      KEYCLOAK_CLIENT_SECRET: ${BACKEND_KEYCLOAK_CLIENT_SECRET}

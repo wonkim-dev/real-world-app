@@ -53,7 +53,7 @@ jobs:
 
       - name: Run docker compose
         run: |
-          docker-compose -f "docker-compose.yml" --env-file .env.e2e up -d
+          docker compose -f "docker-compose.yml" --env-file=.env.e2e --profile=ci-e2e-test up
 
       - name: Run e2e tests
         working-directory: ./nestjs-backend
