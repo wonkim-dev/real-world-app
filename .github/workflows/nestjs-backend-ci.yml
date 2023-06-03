@@ -12,7 +12,7 @@ on:
 
 jobs:
   docker-push:
-    name: Push Docker image to Docker Hub
+    name: Push Docker image
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
@@ -27,7 +27,8 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
-          context: '{{defaultContext}}:nestjs-backend'
+          context: '{{defaultContext}}/nestjs-backend'
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: won6526/real-world-app-nestjs-backend:main
 
@@ -61,7 +62,7 @@ jobs:
         uses: dorny/test-reporter@v1
         if: success()
         with:
-          name: e2e-test-coverage
+          name: Test report
           working-directory: ./nestjs-backend
           path: coverage/jest-junit.xml
           reporter: jest-junit
