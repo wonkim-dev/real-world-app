@@ -14,7 +14,7 @@ import { ProfileResponse } from './profile.model';
 import { DecodedAccessToken } from '../../../models/model';
 import { DecodedAccessTokenOptional } from './profile.decorator';
 
-@Controller('api/profiles')
+@Controller('profiles')
 @ApiBearerAuth()
 @ApiTags('profiles')
 export class ProfileController {

@@ -71,6 +71,7 @@ describe('User', () => {
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(new ValidationPipe());
     app.use(cookieParser());
+    app.setGlobalPrefix('api');
     await app.init();
 
     dataSource = moduleRef.get(DataSource);

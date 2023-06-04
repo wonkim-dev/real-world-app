@@ -21,10 +21,8 @@ RUN npm run build && npm ci --omit=dev
 FROM node:19-alpine
 WORKDIR /app
 RUN chown -R node:node /app
-ENV NODE_ENV production
 USER node
 COPY --chown=node:node --from=build /app/dist ./dist
 COPY --chown=node:node --from=build /app/node_modules ./node_modules
-USER node
 EXPOSE 3000
 CMD [ "node", "dist/main.js" ]

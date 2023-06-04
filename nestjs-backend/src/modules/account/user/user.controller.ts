@@ -18,7 +18,7 @@ import { UserService } from './user.service';
 import { AccessToken, RefreshToken } from './user.decorator';
 import { ChangeUserPasswordDto, CreateUserDto, LoginUserDto, RefreshTokenInput, UpdateUserInfoInput, UserResponse } from './user.model';
 
-@Controller('api/users')
+@Controller('users')
 @ApiBearerAuth()
 @ApiTags('users')
 export class UserController {

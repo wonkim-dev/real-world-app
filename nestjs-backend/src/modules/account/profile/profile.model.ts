@@ -9,13 +9,11 @@ export class ProfileData {
   bio: string;
   @ApiProperty({ example: 'https://api.realworld.io/images/smiley-cyrus.jpg' })
   image: string;
-  @ApiProperty({ example: 'true' })
+  @ApiProperty({ example: true })
   following: boolean;
 }
 
 export class ProfileResponse {
   @ApiProperty()
-  @ValidateNested()
-  @Type(() => ProfileData)
   profile: ProfileData;
 }
