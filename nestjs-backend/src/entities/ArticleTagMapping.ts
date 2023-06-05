@@ -31,17 +31,17 @@ export class ArticleTagMapping {
   })
   updatedAt: Date | null;
 
-  @ManyToOne(() => Article, (article) => article.articleTagMappings, {
+  @ManyToOne(() => Article, (article) => article.articleTagMappingsByFkArticleId, {
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   })
   @JoinColumn([{ name: 'fk_article_id', referencedColumnName: 'articleId' }])
-  fkArticle: Article;
+  articleByFkArticleId: Article;
 
-  @ManyToOne(() => Tag, (tag) => tag.articleTagMappings, {
+  @ManyToOne(() => Tag, (tag) => tag.articleTagMappingsByFkTagId, {
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   })
   @JoinColumn([{ name: 'fk_tag_id', referencedColumnName: 'tagId' }])
-  fkTag: Tag;
+  tagByFkTagId: Tag;
 }

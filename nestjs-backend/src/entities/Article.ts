@@ -40,19 +40,19 @@ export class Article {
   })
   updatedAt: Date | null;
 
-  @ManyToOne(() => User, (user) => user.articles, {
+  @ManyToOne(() => User, (user) => user.articlesByFkUserId, {
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   })
   @JoinColumn([{ name: 'fk_user_id', referencedColumnName: 'userId' }])
-  fkUser: User;
+  userByFkUserId: User;
 
-  @OneToMany(() => ArticleTagMapping, (articleTagMapping) => articleTagMapping.fkArticle)
-  articleTagMappings: ArticleTagMapping[];
+  @OneToMany(() => ArticleTagMapping, (articleTagMapping) => articleTagMapping.articleByFkArticleId)
+  articleTagMappingsByFkArticleId: ArticleTagMapping[];
 
-  @OneToMany(() => ArticleUserMapping, (articleUserMapping) => articleUserMapping.fkArticle)
-  articleUserMappings: ArticleUserMapping[];
+  @OneToMany(() => ArticleUserMapping, (articleUserMapping) => articleUserMapping.articleByFkArticleId)
+  articleUserMappingsByFkArticleId: ArticleUserMapping[];
 
-  @OneToMany(() => Comment, (comment) => comment.fkArticle)
-  comments: Comment[];
+  @OneToMany(() => Comment, (comment) => comment.articleByFkArticleId)
+  commentsByFkArticleId: Comment[];
 }

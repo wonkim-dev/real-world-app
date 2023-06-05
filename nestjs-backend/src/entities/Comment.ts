@@ -31,17 +31,17 @@ export class Comment {
   })
   updatedAt: Date | null;
 
-  @ManyToOne(() => Article, (article) => article.comments, {
+  @ManyToOne(() => Article, (article) => article.commentsByFkArticleId, {
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   })
   @JoinColumn([{ name: 'fk_article_id', referencedColumnName: 'articleId' }])
-  fkArticle: Article;
+  articleByFkArticleId: Article;
 
-  @ManyToOne(() => User, (user) => user.comments, {
+  @ManyToOne(() => User, (user) => user.commentsByFkUserId, {
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   })
   @JoinColumn([{ name: 'fk_user_id', referencedColumnName: 'userId' }])
-  fkUser: User;
+  userByFkUserId: User;
 }

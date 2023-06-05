@@ -37,14 +37,14 @@ export class User {
   })
   updateAt: Date | null;
 
-  @OneToMany(() => Article, (article) => article.fkUser)
-  articles: Article[];
+  @OneToMany(() => Article, (article) => article.userByFkUserId)
+  articlesByFkUserId: Article[];
 
-  @OneToMany(() => ArticleUserMapping, (articleUserMapping) => articleUserMapping.favoritedByFkUser)
-  articleUserMappings: ArticleUserMapping[];
+  @OneToMany(() => ArticleUserMapping, (articleUserMapping) => articleUserMapping.userByFavoritedByFkUserId)
+  articleUserMappingsByFavoritedByFkUserId: ArticleUserMapping[];
 
-  @OneToMany(() => Comment, (comment) => comment.fkUser)
-  comments: Comment[];
+  @OneToMany(() => Comment, (comment) => comment.userByFkUserId)
+  commentsByFkUserId: Comment[];
 
   @OneToMany(() => UserRelation, (userRelation) => userRelation.userByFkUserId)
   userRelationsByFkUserId: UserRelation[];

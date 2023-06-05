@@ -25,6 +25,6 @@ export class Tag {
   })
   updatedAt: Date | null;
 
-  @OneToMany(() => ArticleTagMapping, (articleTagMapping) => articleTagMapping.fkTag)
-  articleTagMappings: ArticleTagMapping[];
+  @OneToMany(() => ArticleTagMapping, (articleTagMapping) => articleTagMapping.tagByFkTagId)
+  articleTagMappingsByFkTagId: ArticleTagMapping[];
 }

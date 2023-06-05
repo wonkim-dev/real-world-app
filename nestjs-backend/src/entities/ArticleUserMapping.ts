@@ -33,17 +33,17 @@ export class ArticleUserMapping {
   })
   updatedAt: Date | null;
 
-  @ManyToOne(() => User, (user) => user.articleUserMappings, {
+  @ManyToOne(() => User, (user) => user.articleUserMappingsByFavoritedByFkUserId, {
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   })
   @JoinColumn([{ name: 'favorited_by_fk_user_id', referencedColumnName: 'userId' }])
-  favoritedByFkUser: User;
+  userByFavoritedByFkUserId: User;
 
-  @ManyToOne(() => Article, (article) => article.articleUserMappings, {
+  @ManyToOne(() => Article, (article) => article.articleUserMappingsByFkArticleId, {
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   })
   @JoinColumn([{ name: 'fk_article_id', referencedColumnName: 'articleId' }])
-  fkArticle: Article;
+  articleByFkArticleId: Article;
 }
