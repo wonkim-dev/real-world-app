@@ -10,5 +10,6 @@ import { ProfileService } from './profile/profile.service';
   imports: [AuthModule, FileModule],
   controllers: [UserController, ProfileController],
   providers: [UserService, ProfileService],
+  exports: [ProfileService],
 })
 export class AccountModule {}
