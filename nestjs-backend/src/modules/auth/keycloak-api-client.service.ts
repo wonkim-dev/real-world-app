@@ -5,7 +5,7 @@ import { AxiosRequestConfig } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { camelCase, mapKeys } from 'lodash';
 import { UpdateUserInfoInput } from 'src/modules/account/user/user.model';
-import { CreateKeycloakUserInput, SessionResponse, TokenResponse } from './models/auth.model';
+import { CreateKeycloakUserInput, SessionResponse, TokenResponse } from './auth.model';
 
 enum KeycloakCredentialType {
   Password = 'password',

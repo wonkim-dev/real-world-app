@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { toNumber } from 'lodash';
 import { CipherCCMTypes, createCipheriv, createDecipheriv, randomBytes } from 'crypto';
-import { EncryptedData } from './models/auth.model';
+import { EncryptedData } from './auth.model';
 
 @Injectable()
 export class EncryptionService {

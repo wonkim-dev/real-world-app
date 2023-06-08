@@ -8,7 +8,7 @@ import { isEmpty, isNil, omitBy, pick } from 'lodash';
 import { DateTime } from 'luxon';
 import * as mime from 'mime-types';
 import { DecodedAccessToken, DecodedRefreshToken } from '../../../models/model';
-import { EncryptedData } from '../../auth/models/auth.model';
+import { EncryptedData } from '../../auth/auth.model';
 import { KeycloakApiClientService } from '../../auth/keycloak-api-client.service';
 import { EncryptionService } from '../../auth/encryption.service';
 import { MinioClientService } from '../../file/minio-client.service';
