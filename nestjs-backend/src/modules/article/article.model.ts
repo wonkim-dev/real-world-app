@@ -1,7 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsArray, IsNotEmpty, IsOptional, IsString, ValidateNested } from 'class-validator';
-import { Article } from '../../entities';
 import { ProfileData } from '../account/profile/profile.model';
 
 export class CreateArticleInput {
@@ -33,6 +32,19 @@ export class CreateArticleDto {
   article: CreateArticleInput;
 }
 
+export class GetArticlesListQuery {
+  @ApiProperty({ type: String, required: false })
+  tag: string;
+  @ApiProperty({ type: String, required: false })
+  author: string;
+  @ApiProperty({ type: String, required: false })
+  favorited: string;
+  @ApiProperty({ type: Number, required: false })
+  limit: number;
+  @ApiProperty({ type: Number, required: false })
+  offset: number;
+}
+
 export class ArticleData {
   @ApiProperty({ example: 'how-to-train-your-dragon' })
   slug: string;
@@ -54,15 +66,6 @@ export class ArticleData {
   updatedAt: string;
   @ApiProperty({ example: ProfileData })
   author: ProfileData;
-
-  constructor(article: Article) {
-    this.slug = article.slug;
-    this.title = article.title;
-    this.description = article.description;
-    this.body = article.body;
-    this.createdAt = article.createdAt.toISOString();
-    this.updatedAt = article.updatedAt.toISOString();
-  }
 }
 
 export class ArticleResponse {
@@ -71,6 +74,6 @@ export class ArticleResponse {
 }
 
 export class ArticlesResponse {
-  @ApiProperty()
+  @ApiProperty({ type: [ArticleData] })
   articles: ArticleData[];
 }
