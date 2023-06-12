@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { DataSource, In, QueryRunner } from 'typeorm';
+import { DataSource, FindOptionsWhere, In, QueryRunner } from 'typeorm';
 import slugify from 'slugify';
 import { v4 as uuidv4 } from 'uuid';
 import { DecodedAccessToken } from '../../models/model';
@@ -59,20 +59,42 @@ export class ArticleService {
     if (!tag && !author && !favoritedBy) {
       throw new ArticleMissingQueryStringError();
     }
-    let tagId: number;
-    let authorUserId: string;
-    let favoritingUserId: string;
+    let findOptionsWhere = await this.getWhereClauseForGetArticleList(tag, author, favoritedBy);
+    const articlesWithRelation = await this.getArticlesWithRelationsPagination(offset, limit, findOptionsWhere);
+    return await this.buildArticleDataResponse(articlesWithRelation);
+  }
+
+  async getArticleFeed(decodedAccessToken: DecodedAccessToken, limit: number, offset: number): Promise<ArticleData[]> {
+    const findOptionsWhere = {
+      userByFkUserId: {
+        userRelationsByFkUserId: { followedByFkUserId: decodedAccessToken.sub },
+      },
+    };
+    const articlesWithRelation = await this.getArticlesWithRelationsPagination(offset, limit, findOptionsWhere);
+    return await this.buildArticleDataResponse(articlesWithRelation);
+  }
+
+  private async getWhereClauseForGetArticleList(tag?: string, author?: string, favoritedBy?: string): Promise<FindOptionsWhere<Article>> {
+    let findOptionsWhere = {} as FindOptionsWhere<Article>;
     if (tag) {
-      tagId = (await this.dataSource.manager.findOneBy(Tag, { name: tag }))?.tagId;
+      const tagId = (await this.dataSource.manager.findOneBy(Tag, { name: tag }))?.tagId;
+      if (tagId) {
+        findOptionsWhere.articleTagMappingsByFkArticleId = { fkTagId: tagId };
+      }
     }
     if (author) {
-      authorUserId = (await this.dataSource.manager.findOneBy(User, { username: author }))?.userId;
+      const authorUserId = (await this.dataSource.manager.findOneBy(User, { username: author }))?.userId;
+      if (authorUserId) {
+        findOptionsWhere.fkUserId = authorUserId;
+      }
     }
     if (favoritedBy) {
-      favoritingUserId = (await this.dataSource.manager.findOneBy(User, { username: favoritedBy }))?.userId;
+      const favoritingUserId = (await this.dataSource.manager.findOneBy(User, { username: favoritedBy }))?.userId;
+      if (favoritingUserId) {
+        findOptionsWhere.articleUserMappingsByFkArticleId = { favoritedByFkUserId: favoritingUserId };
+      }
     }
-    const articlesWithRelation = await this.getArticlesWithRelationsPagination(offset, limit, tagId, favoritingUserId, authorUserId);
-    return await this.buildArticleDataResponse(articlesWithRelation);
+    return findOptionsWhere;
   }
 
   /**
@@ -155,17 +177,13 @@ export class ArticleService {
    * @description Fetch articles and their relations by query strings.
    * @param offset Query string offset for pagination.
    * @param limit Query string limit for pagination.
-   * @param fkTagId Query string fkTagId for filtering article by tag.
-   * @param favoritedByFkUserId Query string favoritedByFkUserId for filtering article by favorited.
-   * @param fkUserId Query string fkUserId for filtering article by author.
+   * @param findOptionsWhere Find option to filter the result.
    * @returns Articles ordered by createdAt descending.
    */
   private async getArticlesWithRelationsPagination(
     offset: number,
     limit: number,
-    fkTagId: number,
-    favoritedByFkUserId: string,
-    fkUserId: string
+    findOptionsWhere: FindOptionsWhere<Article>
   ): Promise<Article[]> {
     const articles = await this.dataSource.manager.find(Article, {
       relations: {
@@ -173,11 +191,7 @@ export class ArticleService {
         articleTagMappingsByFkArticleId: { tagByFkTagId: true },
         articleUserMappingsByFkArticleId: true,
       },
-      where: {
-        articleTagMappingsByFkArticleId: { fkTagId },
-        articleUserMappingsByFkArticleId: { favoritedByFkUserId },
-        fkUserId,
-      },
+      where: findOptionsWhere,
       order: { createdAt: 'DESC' },
       skip: offset,
       take: limit,

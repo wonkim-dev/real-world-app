@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthenticatedUser, Public } from 'nest-keycloak-connect';
 import { DecodedAccessToken } from '../../models/model';
@@ -23,11 +23,11 @@ export class ArticleController {
     return { article };
   }
 
-  @Get()
+  @Get(':slug')
   @Public()
   @ApiOperation({ summary: 'Fetch a article. Authentication is not required.' })
   @ApiResponse({ type: ArticleResponse, status: 200 })
-  async getArticle(@Query('slug') slug: string): Promise<ArticleResponse> {
+  async getArticle(@Param('slug') slug: string): Promise<ArticleResponse> {
     const article = await this.articleService.getArticle(slug);
     return { article };
   }
@@ -49,6 +49,23 @@ export class ArticleController {
     @Query('offset', ParseArticleOffsetIntPipe) offset: number
   ): Promise<ArticlesResponse> {
     const articleDataList = await this.articleService.getArticleList(tag, author, favoritedBy, limit, offset);
+    return { articles: articleDataList };
+  }
+
+  @Get('feed')
+  @ApiOperation({
+    summary:
+      'Fetch most recent articles created by followed users. The results are ordered by most recent first. Authentication is required.',
+  })
+  @ApiQuery({ name: 'limit', type: Number, required: false })
+  @ApiQuery({ name: 'offset', type: Number, required: false })
+  @ApiResponse({ type: ArticlesResponse, status: 200 })
+  async getArticleFeed(
+    @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
+    @Query('limit', ParseArticleLimitIntPipe) limit: number,
+    @Query('offset', ParseArticleOffsetIntPipe) offset: number
+  ): Promise<ArticlesResponse> {
+    const articleDataList = await this.articleService.getArticleFeed(decodedAccessToken, limit, offset);
     return { articles: articleDataList };
   }
 }
