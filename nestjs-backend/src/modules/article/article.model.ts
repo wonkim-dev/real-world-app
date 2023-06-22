@@ -32,6 +32,30 @@ export class CreateArticleDto {
   article: CreateArticleInput;
 }
 
+export class UpdateArticleInput {
+  @IsString()
+  @IsOptional()
+  @ApiProperty()
+  title: string;
+
+  @IsString()
+  @IsOptional()
+  @ApiProperty()
+  description: string;
+
+  @IsString()
+  @IsOptional()
+  @ApiProperty()
+  body: string;
+}
+
+export class UpdateArticleDto {
+  @ApiProperty()
+  @ValidateNested()
+  @Type(() => UpdateArticleInput)
+  article: UpdateArticleInput;
+}
+
 export class GetArticlesListQuery {
   @ApiProperty({ type: String, required: false })
   tag: string;

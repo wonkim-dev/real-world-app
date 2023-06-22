@@ -1,9 +1,9 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthenticatedUser, Public } from 'nest-keycloak-connect';
 import { DecodedAccessToken } from '../../models/model';
 import { ArticleService } from './article.service';
-import { ArticleResponse, ArticlesResponse, CreateArticleDto } from './article.model';
+import { ArticleResponse, ArticlesResponse, CreateArticleDto, UpdateArticleDto } from './article.model';
 import { ParseArticleLimitIntPipe, ParseArticleOffsetIntPipe } from './article.pipe';
 
 @Controller('articles')
@@ -67,5 +67,17 @@ export class ArticleController {
   ): Promise<ArticlesResponse> {
     const articleDataList = await this.articleService.getArticleFeed(decodedAccessToken, limit, offset);
     return { articles: articleDataList };
+  }
+
+  @Patch(':slug')
+  @ApiOperation({ summary: 'Update an existing article' })
+  @ApiResponse({ type: ArticleResponse, status: 200 })
+  async updateArticle(
+    @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
+    @Body() updateArticleDto: UpdateArticleDto,
+    @Param('slug') slug: string
+  ): Promise<ArticleResponse> {
+    const articleData = await this.articleService.updateArticle(decodedAccessToken, slug, updateArticleDto.article);
+    return { article: articleData };
   }
 }

@@ -5,8 +5,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { DecodedAccessToken } from '../../models/model';
 import { Article, ArticleTagMapping, Tag, User } from '../../entities';
 import { ProfileService } from '../account/profile/profile.service';
-import { ArticleData, CreateArticleInput } from './article.model';
-import { ArticleMissingQueryStringError, ArticleNotFoundError } from './article.error';
+import { ArticleData, CreateArticleInput, UpdateArticleInput } from './article.model';
+import {
+  ArticleAccessForbiddenError,
+  ArticleInputNotProvidedError,
+  ArticleMissingQueryStringError,
+  ArticleNotFoundError,
+} from './article.error';
 
 @Injectable()
 export class ArticleService {
@@ -72,6 +77,27 @@ export class ArticleService {
     };
     const articlesWithRelation = await this.getArticlesWithRelationsPagination(offset, limit, findOptionsWhere);
     return await this.buildArticleDataResponse(articlesWithRelation);
+  }
+
+  async updateArticle(decodedAccessToken: DecodedAccessToken, slug: string, updateArticleInput: UpdateArticleInput): Promise<ArticleData> {
+    if (!updateArticleInput || (!updateArticleInput.body && !updateArticleInput.description && !updateArticleInput.title)) {
+      throw new ArticleInputNotProvidedError();
+    }
+    const article = await this.dataSource.manager.findOneBy(Article, { slug });
+    if (!article) {
+      throw new ArticleNotFoundError();
+    }
+    if (decodedAccessToken.sub !== article.fkUserId) {
+      throw new ArticleAccessForbiddenError();
+    }
+    const updatePayload: Partial<Article> = { ...updateArticleInput };
+    if (updateArticleInput.title) {
+      updatePayload.slug = this.generateUniqueSlug(updateArticleInput.title);
+    }
+    await this.dataSource.manager.update(Article, { slug }, updatePayload);
+    const articleWithRelation = await this.getOneArticleWithRelations(article.articleId);
+    const articleData = await this.buildArticleDataResponse([articleWithRelation]);
+    return articleData[0];
   }
 
   private async getWhereClauseForGetArticleList(tag?: string, author?: string, favoritedBy?: string): Promise<FindOptionsWhere<Article>> {

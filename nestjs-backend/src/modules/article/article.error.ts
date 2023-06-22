@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 
 export class ArticleNotFoundError extends NotFoundException {
   static code = 'article_not_found';
@@ -21,5 +21,21 @@ export class ArticleQueryStringInvalidValueTypeError extends BadRequestException
   constructor(queryStringKey: string, queryStringValueType: string) {
     const message = `Value for query string '${queryStringKey}' must be ${queryStringValueType}.`;
     super(message, ArticleQueryStringInvalidValueTypeError.code);
+  }
+}
+
+export class ArticleAccessForbiddenError extends ForbiddenException {
+  static code = 'article_access_forbidden';
+  static message = 'Access denied: You do not have permission to access this article';
+  constructor() {
+    super(ArticleAccessForbiddenError.message, ArticleAccessForbiddenError.code);
+  }
+}
+
+export class ArticleInputNotProvidedError extends BadRequestException {
+  static code = 'article_input_not_provided';
+  static message = 'Article input is not provided. Please try again with the valid input.';
+  constructor() {
+    super(ArticleInputNotProvidedError.message, ArticleInputNotProvidedError.code);
   }
 }
