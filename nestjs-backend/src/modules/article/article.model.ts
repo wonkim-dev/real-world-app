@@ -56,6 +56,19 @@ export class UpdateArticleDto {
   article: UpdateArticleInput;
 }
 
+export class CreateCommentInput {
+  @IsString()
+  @ApiProperty()
+  body: string;
+}
+
+export class CreateCommentDto {
+  @ApiProperty()
+  @ValidateNested()
+  @Type(() => CreateCommentInput)
+  comment: CreateCommentInput;
+}
+
 export class GetArticlesListQuery {
   @ApiProperty({ type: String, required: false })
   tag: string;
@@ -100,4 +113,27 @@ export class ArticleResponse {
 export class ArticlesResponse {
   @ApiProperty({ type: [ArticleData] })
   articles: ArticleData[];
+}
+
+export class CommentData {
+  @ApiProperty({ example: 1 })
+  id: number;
+  @ApiProperty({ example: 'It takes a Jacobian' })
+  body: string;
+  @ApiProperty({ example: '2023-06-18T03:22:56.637Z' })
+  createdAt: string;
+  @ApiProperty({ example: '2023-06-18T03:35:32.223Z' })
+  updatedAt: string;
+  @ApiProperty({ example: ProfileData })
+  author: ProfileData;
+}
+
+export class CommentResponse {
+  @ApiProperty()
+  comment: CommentData;
+}
+
+export class CommentsResponse {
+  @ApiProperty()
+  comments: CommentData[];
 }

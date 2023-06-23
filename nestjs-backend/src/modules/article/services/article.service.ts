@@ -2,16 +2,16 @@ import { Injectable, Logger } from '@nestjs/common';
 import { DataSource, FindOptionsWhere, In, QueryRunner } from 'typeorm';
 import slugify from 'slugify';
 import { v4 as uuidv4 } from 'uuid';
-import { DecodedAccessToken } from '../../models/model';
-import { Article, ArticleTagMapping, Tag, User } from '../../entities';
-import { ProfileService } from '../account/profile/profile.service';
-import { ArticleData, CreateArticleInput, UpdateArticleInput } from './article.model';
+import { DecodedAccessToken } from '../../../models/model';
+import { Article, ArticleTagMapping, Tag, User } from '../../../entities';
+import { ProfileService } from '../../account/profile/profile.service';
+import { ArticleData, CreateArticleInput, UpdateArticleInput } from '../article.model';
 import {
   ArticleAccessForbiddenError,
   ArticleInputNotProvidedError,
   ArticleMissingQueryStringError,
   ArticleNotFoundError,
-} from './article.error';
+} from '../article.error';
 
 @Injectable()
 export class ArticleService {
@@ -98,6 +98,17 @@ export class ArticleService {
     const articleWithRelation = await this.getOneArticleWithRelations(article.articleId);
     const articleData = await this.buildArticleDataResponse([articleWithRelation]);
     return articleData[0];
+  }
+
+  async deleteArticle(decodedAccessToken: DecodedAccessToken, slug: string): Promise<void> {
+    const article = await this.dataSource.manager.findOneBy(Article, { slug });
+    if (!article) {
+      throw new ArticleNotFoundError();
+    }
+    if (decodedAccessToken.sub !== article.fkUserId) {
+      throw new ArticleAccessForbiddenError();
+    }
+    await this.dataSource.manager.delete(Article, { slug });
   }
 
   private async getWhereClauseForGetArticleList(tag?: string, author?: string, favoritedBy?: string): Promise<FindOptionsWhere<Article>> {

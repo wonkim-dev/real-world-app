@@ -39,3 +39,11 @@ export class ArticleInputNotProvidedError extends BadRequestException {
     super(ArticleInputNotProvidedError.message, ArticleInputNotProvidedError.code);
   }
 }
+
+export class ArticleCommentInvalidBodyError extends BadRequestException {
+  static code = 'invalid_article_comment_body';
+  static message = 'Provided article comment is invalid. Please try again with valid comment body.';
+  constructor() {
+    super(ArticleCommentInvalidBodyError.message, ArticleCommentInvalidBodyError.code);
+  }
+}

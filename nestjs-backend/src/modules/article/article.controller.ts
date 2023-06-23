@@ -1,16 +1,31 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthenticatedUser, Public } from 'nest-keycloak-connect';
 import { DecodedAccessToken } from '../../models/model';
-import { ArticleService } from './article.service';
-import { ArticleResponse, ArticlesResponse, CreateArticleDto, UpdateArticleDto } from './article.model';
+import { ArticleService } from './services/article.service';
+import { ArticleCommentService } from './services/article-comment.service';
+import { ArticleFavoriteService } from './services/article-favorite.service';
 import { ParseArticleLimitIntPipe, ParseArticleOffsetIntPipe } from './article.pipe';
+import { DecodedAccessTokenOptional } from './article.decorator';
+import {
+  ArticleResponse,
+  ArticlesResponse,
+  CommentResponse,
+  CommentsResponse,
+  CreateArticleDto,
+  CreateCommentDto,
+  UpdateArticleDto,
+} from './article.model';
 
 @Controller('articles')
 @ApiBearerAuth()
 @ApiTags('article')
 export class ArticleController {
-  constructor(private articleService: ArticleService) {}
+  constructor(
+    private articleService: ArticleService,
+    private articleCommentService: ArticleCommentService,
+    private articleFavoriteService: ArticleFavoriteService
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a new article. Authentication is required.' })
@@ -70,7 +85,7 @@ export class ArticleController {
   }
 
   @Patch(':slug')
-  @ApiOperation({ summary: 'Update an existing article' })
+  @ApiOperation({ summary: 'Update an existing article. Authentication is required.' })
   @ApiResponse({ type: ArticleResponse, status: 200 })
   async updateArticle(
     @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
@@ -79,5 +94,58 @@ export class ArticleController {
   ): Promise<ArticleResponse> {
     const articleData = await this.articleService.updateArticle(decodedAccessToken, slug, updateArticleDto.article);
     return { article: articleData };
+  }
+
+  @Delete(':slug')
+  @ApiOperation({ summary: 'Delete an existing article. Authentication is required.' })
+  @ApiResponse({ status: 200 })
+  async deleteArticle(@AuthenticatedUser() decodedAccessToken: DecodedAccessToken, @Param('slug') slug: string) {
+    await this.articleService.deleteArticle(decodedAccessToken, slug);
+  }
+
+  @Post(':slug/comments')
+  @ApiOperation({ summary: 'Create a comment to the article. Authentication is required.' })
+  @ApiResponse({ type: CommentResponse, status: 201 })
+  async createComment(
+    @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
+    @Param('slug') slug: string,
+    @Body() createCommentDto: CreateCommentDto
+  ): Promise<CommentResponse> {
+    const comment = await this.articleCommentService.createComment(decodedAccessToken, slug, createCommentDto.comment);
+    return { comment };
+  }
+
+  @Public()
+  @Get(':slug/comments')
+  @ApiOperation({ summary: 'Get comments from the article. Authentication is optional.' })
+  @ApiResponse({ type: CommentsResponse, status: 200 })
+  async getComments(
+    @DecodedAccessTokenOptional() decodedAccessToken: DecodedAccessToken,
+    @Param('slug') slug: string
+  ): Promise<CommentsResponse> {
+    const comments = await this.articleCommentService.getComments(decodedAccessToken, slug);
+    return { comments };
+  }
+
+  @Post(':slug/favorite')
+  @ApiOperation({ summary: 'Favorite an article. Authentication is required.' })
+  @ApiResponse({ type: ArticleResponse, status: 201 })
+  async favoriteArticle(
+    @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
+    @Param('slug') slug: string
+  ): Promise<ArticleResponse> {
+    const article = await this.articleFavoriteService.favoriteArticle(decodedAccessToken, slug);
+    return { article };
+  }
+
+  @Delete(':slug/favorite')
+  @ApiOperation({ summary: 'Unfavorite an article. Authentication is required.' })
+  @ApiResponse({ type: ArticleResponse, status: 200 })
+  async unfavoriteArticle(
+    @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
+    @Param('slug') slug: string
+  ): Promise<ArticleResponse> {
+    const article = await this.articleFavoriteService.unfavoriteArticle(decodedAccessToken, slug);
+    return { article };
   }
 }
