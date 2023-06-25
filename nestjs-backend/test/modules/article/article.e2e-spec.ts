@@ -31,10 +31,6 @@ describe('Article', () => {
   let dataSource: DataSource;
   let keycloakApiClientHelperService: KeycloakApiClientHelperService;
   const endpointApiArticles = '/api/articles';
-  const endpointApiArticlesList = '/api/articles/list';
-  const endpointApiArticlesFeed = '/api/articles/feed';
-  const endpointApiArticlesComments = '/api/articles/:slug/comments';
-  const endpointApiArticlesFavorite = '/api/articles/:slug/favorite';
   const endpointApiUsers = '/api/users';
   const mockUser1 = { user: { email: 'e2e-test-1@email.com', password: 'e2e-test-1-password', username: 'e2e-test-1-username' } };
   const mockUser2 = { user: { email: 'e2e-test-2@email.com', password: 'e2e-test-2-password', username: 'e2e-test-2-username' } };
@@ -42,8 +38,6 @@ describe('Article', () => {
   let mockUser2AccessToken: string;
   let decodedAccessToken1: DecodedAccessToken;
   let decodedAccessToken2: DecodedAccessToken;
-  let mockUser1UserId: string;
-  let mockUser2UserId: string;
 
   const articleInput = {
     article: {
@@ -84,11 +78,9 @@ describe('Article', () => {
     const user1 = await request(app.getHttpServer()).post(endpointApiUsers).send(mockUser1);
     mockUser1AccessToken = user1.body.user.accessToken;
     decodedAccessToken1 = JSON.parse(Buffer.from(mockUser1AccessToken.split('.')[1], 'base64').toString('utf8'));
-    mockUser1UserId = decodedAccessToken1.sub;
     const user2 = await request(app.getHttpServer()).post(endpointApiUsers).send(mockUser2);
     mockUser2AccessToken = user2.body.user.accessToken;
     decodedAccessToken2 = JSON.parse(Buffer.from(mockUser2AccessToken.split('.')[1], 'base64').toString('utf8'));
-    mockUser2UserId = decodedAccessToken2.sub;
   });
 
   describe('POST /api/articles', () => {
@@ -405,10 +397,10 @@ describe('Article', () => {
   });
 
   afterAll(async () => {
-    await keycloakApiClientHelperService.deleteKeycloakUser(mockUser1UserId);
-    await dataSource.manager.delete(User, { userId: mockUser1UserId });
-    await keycloakApiClientHelperService.deleteKeycloakUser(mockUser2UserId);
-    await dataSource.manager.delete(User, { userId: mockUser2UserId });
+    await keycloakApiClientHelperService.deleteKeycloakUser(decodedAccessToken1.sub);
+    await dataSource.manager.delete(User, { userId: decodedAccessToken1.sub });
+    await keycloakApiClientHelperService.deleteKeycloakUser(decodedAccessToken2.sub);
+    await dataSource.manager.delete(User, { userId: decodedAccessToken2.sub });
     await app.close();
   });
 });
