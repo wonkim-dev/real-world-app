@@ -1,5 +1,15 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 import { AuthenticatedUser, Public } from 'nest-keycloak-connect';
 import { DecodedAccessToken } from '../../models/model';
 import { ArticleService } from './services/article.service';
@@ -30,6 +40,8 @@ export class ArticleController {
   @Post()
   @ApiOperation({ summary: 'Create a new article. Authentication is required.' })
   @ApiResponse({ type: ArticleResponse, status: 201 })
+  @ApiBadRequestResponse({ description: 'Required fields are not provided' })
+  @ApiUnauthorizedResponse({ description: 'Authentication failed' })
   async createArticle(
     @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
     @Body() createArticleDto: CreateArticleDto
@@ -42,9 +54,36 @@ export class ArticleController {
   @Public()
   @ApiOperation({ summary: 'Fetch a article. Authentication is not required.' })
   @ApiResponse({ type: ArticleResponse, status: 200 })
+  @ApiNotFoundResponse({ description: 'Article does not exist' })
   async getArticle(@Param('slug') slug: string): Promise<ArticleResponse> {
     const article = await this.articleService.getArticle(slug);
     return { article };
+  }
+
+  @Patch(':slug')
+  @ApiOperation({ summary: 'Update an existing article. Authentication is required.' })
+  @ApiResponse({ type: ArticleResponse, status: 200 })
+  @ApiBadRequestResponse({ description: 'Article input is not provided' })
+  @ApiUnauthorizedResponse({ description: 'Authentication failed' })
+  @ApiForbiddenResponse({ description: 'Authorization failed' })
+  @ApiNotFoundResponse({ description: 'Article does not exist' })
+  async updateArticle(
+    @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
+    @Body() updateArticleDto: UpdateArticleDto,
+    @Param('slug') slug: string
+  ): Promise<ArticleResponse> {
+    const articleData = await this.articleService.updateArticle(decodedAccessToken, slug, updateArticleDto.article);
+    return { article: articleData };
+  }
+
+  @Delete(':slug')
+  @ApiOperation({ summary: 'Delete an existing article. Authentication is required.' })
+  @ApiResponse({ status: 200 })
+  @ApiUnauthorizedResponse({ description: 'Authentication failed' })
+  @ApiForbiddenResponse({ description: 'Authorization failed' })
+  @ApiNotFoundResponse({ description: 'Article does not exist' })
+  async deleteArticle(@AuthenticatedUser() decodedAccessToken: DecodedAccessToken, @Param('slug') slug: string) {
+    await this.articleService.deleteArticle(decodedAccessToken, slug);
   }
 
   @Get('list')
@@ -82,25 +121,6 @@ export class ArticleController {
   ): Promise<ArticlesResponse> {
     const articleDataList = await this.articleService.getArticleFeed(decodedAccessToken, limit, offset);
     return { articles: articleDataList };
-  }
-
-  @Patch(':slug')
-  @ApiOperation({ summary: 'Update an existing article. Authentication is required.' })
-  @ApiResponse({ type: ArticleResponse, status: 200 })
-  async updateArticle(
-    @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
-    @Body() updateArticleDto: UpdateArticleDto,
-    @Param('slug') slug: string
-  ): Promise<ArticleResponse> {
-    const articleData = await this.articleService.updateArticle(decodedAccessToken, slug, updateArticleDto.article);
-    return { article: articleData };
-  }
-
-  @Delete(':slug')
-  @ApiOperation({ summary: 'Delete an existing article. Authentication is required.' })
-  @ApiResponse({ status: 200 })
-  async deleteArticle(@AuthenticatedUser() decodedAccessToken: DecodedAccessToken, @Param('slug') slug: string) {
-    await this.articleService.deleteArticle(decodedAccessToken, slug);
   }
 
   @Post(':slug/comments')

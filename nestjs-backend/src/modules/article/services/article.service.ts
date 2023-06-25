@@ -64,7 +64,7 @@ export class ArticleService {
     if (!tag && !author && !favoritedBy) {
       throw new ArticleMissingQueryStringError();
     }
-    let findOptionsWhere = await this.getWhereClauseForGetArticleList(tag, author, favoritedBy);
+    const findOptionsWhere = await this.getWhereClauseForGetArticleList(tag, author, favoritedBy);
     const articlesWithRelation = await this.getArticlesWithRelationsPagination(offset, limit, findOptionsWhere);
     return await this.buildArticleDataResponse(articlesWithRelation);
   }
@@ -112,7 +112,7 @@ export class ArticleService {
   }
 
   private async getWhereClauseForGetArticleList(tag?: string, author?: string, favoritedBy?: string): Promise<FindOptionsWhere<Article>> {
-    let findOptionsWhere = {} as FindOptionsWhere<Article>;
+    const findOptionsWhere = {} as FindOptionsWhere<Article>;
     if (tag) {
       const tagId = (await this.dataSource.manager.findOneBy(Tag, { name: tag }))?.tagId;
       if (tagId) {

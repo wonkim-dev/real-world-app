@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { ProfileService } from '../../account/profile/profile.service';
 import { DecodedAccessToken } from '../../../models/model';
@@ -51,7 +51,7 @@ export class ArticleFavoriteService {
     return articleData;
   }
 
-  private buildArticleData(article: Article) {
+  private buildArticleData(article: Article): ArticleData {
     const articleData = {
       slug: article.slug,
       title: article.title,
