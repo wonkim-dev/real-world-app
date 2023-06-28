@@ -12,7 +12,7 @@ export class TagController {
 
   @Get()
   @Public()
-  @ApiOperation({ summary: 'Get a list of tags.' })
+  @ApiOperation({ summary: 'Get a list of tags. Authentication is not required.' })
   @ApiResponse({ type: TagsResponse, status: 200 })
   async getTags() {
     const tags = await this.tagService.getTags();
