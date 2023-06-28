@@ -17,7 +17,7 @@ import CacheModule from '../../../src/import/cache.module';
 import { TestHelperModule } from '../../helper/test-helper.module';
 import { DecodedAccessToken } from '../../../src/models/model';
 import { KeycloakApiClientHelperService } from '../../helper/keycloak-api-client-helper.service';
-import { Article, ArticleUserMapping, Tag, User } from '../../../src/entities';
+import { Article, ArticleUserMapping, Tag, User, UserRelation } from '../../../src/entities';
 import { ArticleModule } from '../../../src/modules/article/article.module';
 import { ArticleData, ArticleResponse, CreateArticleDto } from '../../../src/modules/article/article.model';
 import { ArticleMissingQueryStringError } from '../../../src/modules/article/article.error';
@@ -29,6 +29,7 @@ describe('Article', () => {
   const endpointApiArticles = '/api/articles';
   const endpointApiUsers = '/api/users';
   const endpointApiArticlesList = '/api/articles/list';
+  const endpointApiArticlesFeed = '/api/articles/feed';
   const mockUser1 = { user: { email: 'e2e-test-1@email.com', password: 'e2e-test-1-password', username: 'e2e-test-1-username' } };
   const mockUser2 = { user: { email: 'e2e-test-2@email.com', password: 'e2e-test-2-password', username: 'e2e-test-2-username' } };
   const mockUser3 = { user: { email: 'e2e-test-3@email.com', password: 'e2e-test-3-password', username: 'e2e-test-3-username' } };
@@ -86,6 +87,9 @@ describe('Article', () => {
     mockUser3AccessToken = user3.body.user.accessToken;
     decodedAccessToken3 = JSON.parse(Buffer.from(mockUser3AccessToken.split('.')[1], 'base64').toString('utf8'));
 
+    // User 1 follows user 2
+    await dataSource.manager.save(UserRelation, { fkUserId: decodedAccessToken2.sub, followedByFkUserId: decodedAccessToken1.sub });
+
     const testUsers = [
       { accessToken: mockUser1AccessToken, decodedAccessToken: decodedAccessToken1 },
       { accessToken: mockUser2AccessToken, decodedAccessToken: decodedAccessToken2 },
@@ -137,9 +141,7 @@ describe('Article', () => {
   describe('GET /api/articles/list', () => {
     describe('Positive tests', () => {
       it('should fetch recent 3 articles by author using default limit and offset', async () => {
-        const res = await request(app.getHttpServer())
-          .get(`${endpointApiArticlesList}?author=${decodedAccessToken2.preferred_username}`)
-          .set('Authorization', `Bearer ${mockUser1AccessToken}`);
+        const res = await request(app.getHttpServer()).get(`${endpointApiArticlesList}?author=${decodedAccessToken2.preferred_username}`);
 
         expect(res.status).toBe(200);
         expect(res.body.articles).toHaveLength(3);
@@ -177,9 +179,9 @@ describe('Article', () => {
       });
 
       it('should fetch recent one article by author using limit 3 and offset 2', async () => {
-        const res = await request(app.getHttpServer())
-          .get(`${endpointApiArticlesList}?author=${decodedAccessToken2.preferred_username}&limit=3&offset=2`)
-          .set('Authorization', `Bearer ${mockUser1AccessToken}`);
+        const res = await request(app.getHttpServer()).get(
+          `${endpointApiArticlesList}?author=${decodedAccessToken2.preferred_username}&limit=3&offset=2`
+        );
 
         expect(res.status).toBe(200);
         expect(res.body.articles).toHaveLength(1);
@@ -199,9 +201,7 @@ describe('Article', () => {
       });
 
       it('should fetch recent 6 articles by tag using default limit and offset', async () => {
-        const res = await request(app.getHttpServer())
-          .get(`${endpointApiArticlesList}?tag=${articleTags[0]}`)
-          .set('Authorization', `Bearer ${mockUser1AccessToken}`);
+        const res = await request(app.getHttpServer()).get(`${endpointApiArticlesList}?tag=${articleTags[0]}`);
 
         expect(res.status).toBe(200);
         expect(res.body.articles).toHaveLength(6);
@@ -236,9 +236,7 @@ describe('Article', () => {
       });
 
       it('should fetch recent 2 articles by tag using limit 2 and offset 4', async () => {
-        const res = await request(app.getHttpServer())
-          .get(`${endpointApiArticlesList}?tag=${articleTags[0]}&limit=2&offset=4`)
-          .set('Authorization', `Bearer ${mockUser1AccessToken}`);
+        const res = await request(app.getHttpServer()).get(`${endpointApiArticlesList}?tag=${articleTags[0]}&limit=2&offset=4`);
 
         expect(res.status).toBe(200);
         expect(res.body.articles).toHaveLength(2);
@@ -257,9 +255,9 @@ describe('Article', () => {
       });
 
       it('should fetch recent 3 articles by favoritedBy using default limit and offset', async () => {
-        const res = await request(app.getHttpServer())
-          .get(`${endpointApiArticlesList}?favoritedBy=${decodedAccessToken3.preferred_username}`)
-          .set('Authorization', `Bearer ${mockUser1AccessToken}`);
+        const res = await request(app.getHttpServer()).get(
+          `${endpointApiArticlesList}?favoritedBy=${decodedAccessToken3.preferred_username}`
+        );
 
         expect(res.status).toBe(200);
         expect(res.body.articles).toHaveLength(3);
@@ -282,9 +280,9 @@ describe('Article', () => {
       });
 
       it('should fetch recent 1 article by favoritedBy using limit 2 and offset 2', async () => {
-        const res = await request(app.getHttpServer())
-          .get(`${endpointApiArticlesList}?favoritedBy=${decodedAccessToken3.preferred_username}&limit=2&offset=2`)
-          .set('Authorization', `Bearer ${mockUser1AccessToken}`);
+        const res = await request(app.getHttpServer()).get(
+          `${endpointApiArticlesList}?favoritedBy=${decodedAccessToken3.preferred_username}&limit=2&offset=2`
+        );
 
         expect(res.status).toBe(200);
         expect(res.body.articles).toHaveLength(1);
@@ -299,11 +297,9 @@ describe('Article', () => {
       });
 
       it('should fetch recent 1 article by favoritedBy, tag and author using limit 1 and offset 1', async () => {
-        const res = await request(app.getHttpServer())
-          .get(
-            `${endpointApiArticlesList}?favoritedBy=${decodedAccessToken3.preferred_username}&author=${decodedAccessToken2.preferred_username}&tag=${articleTags[0]}&limit=1&offset=1`
-          )
-          .set('Authorization', `Bearer ${mockUser1AccessToken}`);
+        const res = await request(app.getHttpServer()).get(
+          `${endpointApiArticlesList}?favoritedBy=${decodedAccessToken3.preferred_username}&author=${decodedAccessToken2.preferred_username}&tag=${articleTags[0]}&limit=1&offset=1`
+        );
 
         expect(res.status).toBe(200);
         expect(res.body.articles).toHaveLength(1);
@@ -320,14 +316,62 @@ describe('Article', () => {
 
     describe('Negative tests', () => {
       it('should fail if query string is not provided', async () => {
-        const res = await request(app.getHttpServer())
-          .get(`${endpointApiArticlesList}`)
-          .set('Authorization', `Bearer ${mockUser1AccessToken}`);
+        const res = await request(app.getHttpServer()).get(`${endpointApiArticlesList}`);
 
         expect(res.status).toBe(400);
         expect(res.body).toEqual(
           expect.objectContaining({ message: ArticleMissingQueryStringError.message, error: ArticleMissingQueryStringError.code })
         );
+      });
+    });
+  });
+
+  describe('GET /api/articles/feed', () => {
+    describe('Positive tests', () => {
+      it('should fetch recent 3 articles feed using default limit and offset', async () => {
+        const res = await request(app.getHttpServer())
+          .get(`${endpointApiArticlesFeed}`)
+          .set('Authorization', `Bearer ${mockUser1AccessToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.articles).toHaveLength(3);
+        expect(res.body.articles).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              title: expect.stringContaining(`${articleInput.article.title}-${decodedAccessToken2.preferred_username}-1`),
+            } as Partial<ArticleData>),
+            expect.objectContaining({
+              title: expect.stringContaining(`${articleInput.article.title}-${decodedAccessToken2.preferred_username}-2`),
+            } as Partial<ArticleData>),
+            expect.objectContaining({
+              title: expect.stringContaining(`${articleInput.article.title}-${decodedAccessToken2.preferred_username}-2`),
+            } as Partial<ArticleData>),
+          ])
+        );
+      });
+
+      it('should fetch recent one article feed using limit 2 and offset 2', async () => {
+        const res = await request(app.getHttpServer())
+          .get(`${endpointApiArticlesFeed}?limit=2&offset=2`)
+          .set('Authorization', `Bearer ${mockUser1AccessToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.articles).toHaveLength(1);
+        expect(res.body.articles).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              title: expect.stringContaining(`${articleInput.article.title}-${decodedAccessToken2.preferred_username}-1`),
+            } as Partial<ArticleData>),
+          ])
+        );
+      });
+    });
+
+    describe('Negative tests', () => {
+      it('should fail if not authenticated', async () => {
+        const res = await request(app.getHttpServer()).get(`${endpointApiArticlesFeed}`);
+
+        expect(res.body).toEqual(expect.objectContaining({ statusCode: 401, message: 'Unauthorized' }));
       });
     });
   });

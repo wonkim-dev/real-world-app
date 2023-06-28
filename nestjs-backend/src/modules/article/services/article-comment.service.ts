@@ -24,7 +24,7 @@ export class ArticleCommentService {
       fkUserId: decodedAccessToken.sub,
     } as Partial<Comment>;
     const comment = await this.dataSource.manager.save(Comment, commentInsertPayload);
-    const author = await this.profileService.getProfile(article.userByFkUserId.username, decodedAccessToken);
+    const author = await this.profileService.getProfile(decodedAccessToken.preferred_username);
     return {
       id: comment.commentId,
       body: comment.body,

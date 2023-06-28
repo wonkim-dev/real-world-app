@@ -79,6 +79,7 @@ export class ArticleController {
   @ApiQuery({ name: 'limit', type: Number, required: false })
   @ApiQuery({ name: 'offset', type: Number, required: false })
   @ApiResponse({ type: ArticlesResponse, status: 200 })
+  @ApiUnauthorizedResponse({ description: 'Authentication failed' })
   async getArticleFeed(
     @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
     @Query('limit', ParseArticleLimitIntPipe) limit: number,
@@ -127,6 +128,7 @@ export class ArticleController {
   @Post(':slug/comments')
   @ApiOperation({ summary: 'Create a comment to the article. Authentication is required.' })
   @ApiResponse({ type: CommentResponse, status: 201 })
+  @ApiNotFoundResponse({ description: 'Article does not exist' })
   async createComment(
     @AuthenticatedUser() decodedAccessToken: DecodedAccessToken,
     @Param('slug') slug: string,
@@ -140,6 +142,7 @@ export class ArticleController {
   @Get(':slug/comments')
   @ApiOperation({ summary: 'Get comments from the article. Authentication is optional.' })
   @ApiResponse({ type: CommentsResponse, status: 200 })
+  @ApiNotFoundResponse({ description: 'Article does not exist' })
   async getComments(
     @DecodedAccessTokenOptional() decodedAccessToken: DecodedAccessToken,
     @Param('slug') slug: string
