@@ -59,6 +59,7 @@ export class ArticleController {
   @ApiQuery({ name: 'limit', type: Number, required: false })
   @ApiQuery({ name: 'offset', type: Number, required: false })
   @ApiResponse({ type: ArticlesResponse, status: 200 })
+  @ApiBadRequestResponse({ description: 'Required query string is missing' })
   async getArticles(
     @Query('tag') tag: string,
     @Query('author') author: string,

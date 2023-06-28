@@ -65,17 +65,28 @@ export class ArticleService {
       throw new ArticleMissingQueryStringError();
     }
     const findOptionsWhere = await this.getWhereClauseForGetArticleList(tag, author, favoritedBy);
-    const articlesWithRelation = await this.getArticlesWithRelationsPagination(offset, limit, findOptionsWhere);
+    const articlesPagination = await this.getArticlesPagination(offset, limit, findOptionsWhere);
+    const articleIds = articlesPagination.map((article) => article.articleId);
+    const articlesWithRelation = await this.getArticlesByIdsWithRelations(articleIds);
     return await this.buildArticleDataResponse(articlesWithRelation);
   }
 
   async getArticleFeed(decodedAccessToken: DecodedAccessToken, limit: number, offset: number): Promise<ArticleData[]> {
-    const findOptionsWhere = {
-      userByFkUserId: {
-        userRelationsByFkUserId: { followedByFkUserId: decodedAccessToken.sub },
+    const articlesWithRelation = await this.dataSource.manager.find(Article, {
+      relations: {
+        userByFkUserId: true,
+        articleTagMappingsByFkArticleId: { tagByFkTagId: true },
+        articleUserMappingsByFkArticleId: true,
       },
-    };
-    const articlesWithRelation = await this.getArticlesWithRelationsPagination(offset, limit, findOptionsWhere);
+      where: {
+        userByFkUserId: {
+          userRelationsByFkUserId: { followedByFkUserId: decodedAccessToken.sub },
+        },
+      },
+      order: { createdAt: 'DESC' },
+      skip: offset,
+      take: limit,
+    });
     return await this.buildArticleDataResponse(articlesWithRelation);
   }
 
@@ -210,30 +221,25 @@ export class ArticleService {
     });
   }
 
-  /**
-   * @description Fetch articles and their relations by query strings.
-   * @param offset Query string offset for pagination.
-   * @param limit Query string limit for pagination.
-   * @param findOptionsWhere Find option to filter the result.
-   * @returns Articles ordered by createdAt descending.
-   */
-  private async getArticlesWithRelationsPagination(
-    offset: number,
-    limit: number,
-    findOptionsWhere: FindOptionsWhere<Article>
-  ): Promise<Article[]> {
-    const articles = await this.dataSource.manager.find(Article, {
-      relations: {
-        userByFkUserId: true,
-        articleTagMappingsByFkArticleId: { tagByFkTagId: true },
-        articleUserMappingsByFkArticleId: true,
-      },
+  private async getArticlesPagination(offset: number, limit: number, findOptionsWhere: FindOptionsWhere<Article>) {
+    return await this.dataSource.manager.find(Article, {
       where: findOptionsWhere,
       order: { createdAt: 'DESC' },
       skip: offset,
       take: limit,
     });
-    return articles;
+  }
+
+  private async getArticlesByIdsWithRelations(articleIds: number[]): Promise<Article[]> {
+    return await this.dataSource.manager.find(Article, {
+      relations: {
+        userByFkUserId: true,
+        articleTagMappingsByFkArticleId: { tagByFkTagId: true },
+        articleUserMappingsByFkArticleId: true,
+      },
+      where: { articleId: In(articleIds) },
+      order: { createdAt: 'DESC' },
+    });
   }
 
   /**
