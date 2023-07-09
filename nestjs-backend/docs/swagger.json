@@ -1,7 +1,163 @@
 {
   "openapi": "3.0.0",
   "paths": {
-    "/health": { "get": { "operationId": "AppController_getHello", "parameters": [], "responses": { "200": { "description": "" } } } },
+    "/health": { "get": { "operationId": "AppController_getHealth", "parameters": [], "responses": { "200": { "description": "" } } } },
+    "/api/articles": {
+      "post": {
+        "operationId": "ArticleController_createArticle",
+        "summary": "Create a new article. Authentication is required.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateArticleDto" } } }
+        },
+        "responses": {
+          "201": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ArticleResponse" } } } },
+          "400": { "description": "Required fields are not provided" },
+          "401": { "description": "Authentication failed" }
+        },
+        "tags": ["article"],
+        "security": [{ "bearer": [] }]
+      }
+    },
+    "/api/articles/list": {
+      "get": {
+        "operationId": "ArticleController_getArticles",
+        "summary": "Fetch most recent articles. The results are ordered by most recent first. Authentication is not required.",
+        "parameters": [
+          { "name": "tag", "required": false, "in": "query", "schema": { "type": "string" } },
+          { "name": "author", "required": false, "in": "query", "schema": { "type": "string" } },
+          { "name": "favoritedBy", "required": false, "in": "query", "schema": { "type": "string" } },
+          { "name": "limit", "required": false, "in": "query", "schema": { "type": "number" } },
+          { "name": "offset", "required": false, "in": "query", "schema": { "type": "number" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ArticlesResponse" } } }
+          },
+          "400": { "description": "Required query string is missing" }
+        },
+        "tags": ["article"],
+        "security": [{ "bearer": [] }]
+      }
+    },
+    "/api/articles/feed": {
+      "get": {
+        "operationId": "ArticleController_getArticleFeed",
+        "summary": "Fetch most recent articles created by followed users. The results are ordered by most recent first. Authentication is required.",
+        "parameters": [
+          { "name": "limit", "required": false, "in": "query", "schema": { "type": "number" } },
+          { "name": "offset", "required": false, "in": "query", "schema": { "type": "number" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ArticlesResponse" } } }
+          },
+          "401": { "description": "Authentication failed" }
+        },
+        "tags": ["article"],
+        "security": [{ "bearer": [] }]
+      }
+    },
+    "/api/articles/{slug}": {
+      "get": {
+        "operationId": "ArticleController_getArticle",
+        "summary": "Fetch a article. Authentication is not required.",
+        "parameters": [{ "name": "slug", "required": true, "in": "path", "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ArticleResponse" } } } },
+          "404": { "description": "Article does not exist" }
+        },
+        "tags": ["article"],
+        "security": [{ "bearer": [] }]
+      },
+      "patch": {
+        "operationId": "ArticleController_updateArticle",
+        "summary": "Update an existing article. Authentication is required.",
+        "parameters": [{ "name": "slug", "required": true, "in": "path", "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateArticleDto" } } }
+        },
+        "responses": {
+          "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ArticleResponse" } } } },
+          "400": { "description": "Article input is not provided" },
+          "401": { "description": "Authentication failed" },
+          "403": { "description": "Authorization failed" },
+          "404": { "description": "Article does not exist" }
+        },
+        "tags": ["article"],
+        "security": [{ "bearer": [] }]
+      },
+      "delete": {
+        "operationId": "ArticleController_deleteArticle",
+        "summary": "Delete an existing article. Authentication is required.",
+        "parameters": [{ "name": "slug", "required": true, "in": "path", "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "" },
+          "401": { "description": "Authentication failed" },
+          "403": { "description": "Authorization failed" },
+          "404": { "description": "Article does not exist" }
+        },
+        "tags": ["article"],
+        "security": [{ "bearer": [] }]
+      }
+    },
+    "/api/articles/{slug}/comments": {
+      "post": {
+        "operationId": "ArticleController_createComment",
+        "summary": "Create a comment to the article. Authentication is required.",
+        "parameters": [{ "name": "slug", "required": true, "in": "path", "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateCommentDto" } } }
+        },
+        "responses": {
+          "201": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CommentResponse" } } } },
+          "404": { "description": "Article does not exist" }
+        },
+        "tags": ["article"],
+        "security": [{ "bearer": [] }]
+      },
+      "get": {
+        "operationId": "ArticleController_getComments",
+        "summary": "Get comments from the article. Authentication is optional.",
+        "parameters": [{ "name": "slug", "required": true, "in": "path", "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CommentsResponse" } } }
+          },
+          "404": { "description": "Article does not exist" }
+        },
+        "tags": ["article"],
+        "security": [{ "bearer": [] }]
+      }
+    },
+    "/api/articles/{slug}/favorite": {
+      "post": {
+        "operationId": "ArticleController_favoriteArticle",
+        "summary": "Favorite an article. Authentication is required.",
+        "parameters": [{ "name": "slug", "required": true, "in": "path", "schema": { "type": "string" } }],
+        "responses": {
+          "201": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ArticleResponse" } } } }
+        },
+        "tags": ["article"],
+        "security": [{ "bearer": [] }]
+      },
+      "delete": {
+        "operationId": "ArticleController_unfavoriteArticle",
+        "summary": "Unfavorite an article. Authentication is required.",
+        "parameters": [{ "name": "slug", "required": true, "in": "path", "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ArticleResponse" } } } }
+        },
+        "tags": ["article"],
+        "security": [{ "bearer": [] }]
+      }
+    },
     "/api/users": {
       "post": {
         "operationId": "UserController_createUser",
@@ -9,7 +165,7 @@
         "parameters": [],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateUserInput" } } }
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateUserDto" } } }
         },
         "responses": {
           "201": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserResponse" } } } },
@@ -33,12 +189,23 @@
       },
       "patch": {
         "operationId": "UserController_updateUserInfo",
-        "summary": "Update user information such as username, bio, image. Authentication is required.",
+        "summary": "Update user information such as username, bio, avatar image. Authentication is required.",
         "description": "A refresh token stored in backend is used to extend the current user session after successful update. A newly issued access token is returned.",
         "parameters": [],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateUserInfoInput" } } }
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": { "type": "string", "nullable": true },
+                  "bio": { "type": "string", "nullable": true },
+                  "avatar": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
         },
         "responses": {
           "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserResponse" } } } },
@@ -56,7 +223,7 @@
         "parameters": [],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginUserInput" } } }
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginUserDto" } } }
         },
         "responses": {
           "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserResponse" } } } },
@@ -75,7 +242,7 @@
         "parameters": [],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChangeUserPasswordInput" } } }
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChangeUserPasswordDto" } } }
         },
         "responses": {
           "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserResponse" } } } },
@@ -102,6 +269,58 @@
         "tags": ["users"],
         "security": [{ "bearer": [] }]
       }
+    },
+    "/api/profiles/{username}": {
+      "get": {
+        "operationId": "ProfileController_getProfile",
+        "summary": "Get a profile of a user by username. Authentication is not required.",
+        "description": "If authenticated, whether the authenticated user follows the requested user is checked and returned in the response.",
+        "parameters": [{ "name": "username", "required": true, "in": "path", "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProfileResponse" } } } },
+          "404": { "description": "Profile not found" }
+        },
+        "tags": ["profiles"],
+        "security": [{ "bearer": [] }]
+      }
+    },
+    "/api/profiles/{username}/follow": {
+      "post": {
+        "operationId": "ProfileController_followProfile",
+        "summary": "Follow the requested profile. Authentication is required.",
+        "parameters": [{ "name": "username", "required": true, "in": "path", "schema": { "type": "string" } }],
+        "responses": {
+          "201": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProfileResponse" } } } },
+          "409": { "description": "Authenticated user already follows the profile." },
+          "500": { "description": "Invalid user id" }
+        },
+        "tags": ["profiles"],
+        "security": [{ "bearer": [] }]
+      }
+    },
+    "/api/profiles/{username}/unfollow": {
+      "delete": {
+        "operationId": "ProfileController_unfollowProfile",
+        "summary": "Unfollow the requested profile. Authentication is required.",
+        "parameters": [{ "name": "username", "required": true, "in": "path", "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProfileResponse" } } } }
+        },
+        "tags": ["profiles"],
+        "security": [{ "bearer": [] }]
+      }
+    },
+    "/api/tags": {
+      "get": {
+        "operationId": "TagController_getTags",
+        "summary": "Get a list of tags. Authentication is not required.",
+        "parameters": [],
+        "responses": {
+          "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TagsResponse" } } } }
+        },
+        "tags": ["tags"],
+        "security": [{ "bearer": [] }]
+      }
     }
   },
   "info": { "title": "Real World Application", "description": "The REST API for Real World Application", "version": "1.0", "contact": {} },
@@ -110,12 +329,105 @@
   "components": {
     "securitySchemes": { "bearer": { "scheme": "bearer", "bearerFormat": "JWT", "type": "http" } },
     "schemas": {
+      "CreateArticleInput": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "body": { "type": "string" },
+          "tagList": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["title", "description", "body", "tagList"]
+      },
+      "CreateArticleDto": {
+        "type": "object",
+        "properties": { "article": { "$ref": "#/components/schemas/CreateArticleInput" } },
+        "required": ["article"]
+      },
+      "ProfileData": {
+        "type": "object",
+        "properties": {
+          "username": { "type": "string", "example": "jake" },
+          "bio": { "type": "string", "example": "I am the first user of the app!" },
+          "image": { "type": "string", "example": "https://api.realworld.io/images/smiley-cyrus.jpg" },
+          "following": { "type": "boolean", "example": true }
+        },
+        "required": ["username", "bio", "image", "following"]
+      },
+      "ArticleData": {
+        "type": "object",
+        "properties": {
+          "slug": { "type": "string", "example": "how-to-train-your-dragon" },
+          "title": { "type": "string", "example": "How to train your dragon" },
+          "description": { "type": "string", "example": "Ever wonder how?" },
+          "body": { "type": "string", "example": "It takes a Jacobian" },
+          "favorited": { "type": "boolean", "example": false },
+          "favoritesCount": { "type": "number", "example": 0 },
+          "tagList": { "example": ["dragons", "training"], "type": "array", "items": { "type": "string" } },
+          "createdAt": { "type": "string", "example": "2023-06-18T03:22:56.637Z" },
+          "updatedAt": { "type": "string", "example": "2023-06-18T03:35:32.223Z" },
+          "author": { "allOf": [{ "$ref": "#/components/schemas/ProfileData" }] }
+        },
+        "required": ["slug", "title", "description", "body", "favorited", "favoritesCount", "tagList", "createdAt", "updatedAt", "author"]
+      },
+      "ArticleResponse": {
+        "type": "object",
+        "properties": { "article": { "$ref": "#/components/schemas/ArticleData" } },
+        "required": ["article"]
+      },
+      "ArticlesResponse": {
+        "type": "object",
+        "properties": { "articles": { "type": "array", "items": { "$ref": "#/components/schemas/ArticleData" } } },
+        "required": ["articles"]
+      },
+      "UpdateArticleInput": {
+        "type": "object",
+        "properties": { "title": { "type": "string" }, "description": { "type": "string" }, "body": { "type": "string" } },
+        "required": ["title", "description", "body"]
+      },
+      "UpdateArticleDto": {
+        "type": "object",
+        "properties": { "article": { "$ref": "#/components/schemas/UpdateArticleInput" } },
+        "required": ["article"]
+      },
+      "CreateCommentInput": { "type": "object", "properties": { "body": { "type": "string" } }, "required": ["body"] },
+      "CreateCommentDto": {
+        "type": "object",
+        "properties": { "comment": { "$ref": "#/components/schemas/CreateCommentInput" } },
+        "required": ["comment"]
+      },
+      "CommentData": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "number", "example": 1 },
+          "body": { "type": "string", "example": "It takes a Jacobian" },
+          "createdAt": { "type": "string", "example": "2023-06-18T03:22:56.637Z" },
+          "updatedAt": { "type": "string", "example": "2023-06-18T03:35:32.223Z" },
+          "author": { "allOf": [{ "$ref": "#/components/schemas/ProfileData" }] }
+        },
+        "required": ["id", "body", "createdAt", "updatedAt", "author"]
+      },
+      "CommentResponse": {
+        "type": "object",
+        "properties": { "comment": { "$ref": "#/components/schemas/CommentData" } },
+        "required": ["comment"]
+      },
+      "CommentsResponse": {
+        "type": "object",
+        "properties": { "comments": { "type": "array", "items": { "type": "string" } } },
+        "required": ["comments"]
+      },
       "CreateUserInput": {
         "type": "object",
         "properties": { "email": { "type": "string" }, "username": { "type": "string" }, "password": { "type": "string" } },
         "required": ["email", "username", "password"]
       },
-      "UserResponse": {
+      "CreateUserDto": {
+        "type": "object",
+        "properties": { "user": { "$ref": "#/components/schemas/CreateUserInput" } },
+        "required": ["user"]
+      },
+      "UserData": {
         "type": "object",
         "properties": {
           "username": { "type": "string", "example": "jake" },
@@ -126,22 +438,38 @@
         },
         "required": ["username", "email", "bio", "image", "accessToken"]
       },
+      "UserResponse": { "type": "object", "properties": { "user": { "$ref": "#/components/schemas/UserData" } }, "required": ["user"] },
       "LoginUserInput": {
         "type": "object",
         "properties": { "email": { "type": "string" }, "password": { "type": "string" } },
         "required": ["email", "password"]
+      },
+      "LoginUserDto": {
+        "type": "object",
+        "properties": { "user": { "$ref": "#/components/schemas/LoginUserInput" } },
+        "required": ["user"]
       },
       "ChangeUserPasswordInput": {
         "type": "object",
         "properties": { "oldPassword": { "type": "string" }, "newPassword": { "type": "string" } },
         "required": ["oldPassword", "newPassword"]
       },
-      "UpdateUserInfoInput": {
+      "ChangeUserPasswordDto": {
         "type": "object",
-        "properties": { "username": { "type": "string" }, "bio": { "type": "string" } },
-        "required": ["username", "bio"]
+        "properties": { "user": { "$ref": "#/components/schemas/ChangeUserPasswordInput" } },
+        "required": ["user"]
       },
-      "RefreshTokenInput": { "type": "object", "properties": { "sessionId": { "type": "string" } }, "required": ["sessionId"] }
+      "RefreshTokenInput": { "type": "object", "properties": { "sessionId": { "type": "string" } }, "required": ["sessionId"] },
+      "ProfileResponse": {
+        "type": "object",
+        "properties": { "profile": { "$ref": "#/components/schemas/ProfileData" } },
+        "required": ["profile"]
+      },
+      "TagsResponse": {
+        "type": "object",
+        "properties": { "tags": { "type": "array", "items": { "type": "string" } } },
+        "required": ["tags"]
+      }
     }
   }
 }
